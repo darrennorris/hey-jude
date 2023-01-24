@@ -1,0 +1,48 @@
+---
+title: "01_development"
+author: "Darren Norris"
+date: "`r Sys.Date()`"
+output:
+  bookdown::html_document2:
+    toc: yes
+    toc_float: yes
+    toc_depth: 3
+    fig_caption: yes
+  bookdown::pdf_document2:
+    toc: yes
+    toc_depth: 3
+    number_sections: yes
+    extra_dependencies: flafter
+    highlight: tango
+    includes:
+      in_header: preamble.txe
+always_allow_html: yes
+urlcolor: blue
+toc-title: Contents
+header-includes:
+  - \counterwithin{figure}{section}
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(
+  echo = TRUE, collapse = TRUE,
+  comment = "#>" 
+  )
+def_hook <- knit_hooks$get("output")
+knit_hooks$set(output = function(x, options) {
+  out <- def_hook(x, options)
+  return(paste("\\begin{framed}\\begin{verbatim}", x, "\\end{verbatim}\\end{framed}", collapse = "\n"))
+})
+```
+
+\newpage{}
+
+# Load and prep data
+
+
+## Journal impact
+
+[Scopus CiteScore](https://www.elsevier.com/solutions/scopus/how-scopus-works/metrics/citescore) and [JCR Journal Impact Factor](https://clarivate.com/webofsciencegroup/solutions/journal-citation-reports/), downloaded on 4 and 23 January 2023 respectively. Includes years from 
+2011 to 2021 as 2011 is first year for CiteScore and also follows the 
+definition of conservation threats and actions published in 2008 (Salafsky et. al., 2008 A Standard Lexicon for Biodiversity Conservation: Unified Classifications of Threats and Actions https://doi.org/10.1111/j.1523-1739.2008.00937.x). Journals in Nature and Landscape Conservation (CiteScore: ) and Biodiversity Conservation (JIF).
