@@ -51,7 +51,7 @@ library(gridExtra)
 
 [Scopus CiteScore](https://www.elsevier.com/solutions/scopus/how-scopus-works/metrics/citescore) and [JCR Journal Impact Factor ("JIF")](https://clarivate.com/webofsciencegroup/solutions/journal-citation-reports/), downloaded on 24 and 23 January 2023 respectively. 
 Using 11 years (2011 to 2021), as 2011 is first year for CiteScore and also follows the definition of conservation threats and actions published in 2008 (Salafsky et. al., 2008 A Standard Lexicon for Biodiversity Conservation: Unified Classifications of Threats and Actions https://doi.org/10.1111/j.1523-1739.2008.00937.x). 
-The companies classify journals differently and the folder [data](https://github.com/darrennorris/hey-jude/tree/main/data) has impact of JCR Biodiversity Conservation category (JIF https://github.com/darrennorris/hey-jude/tree/main/data/clarivate_JCR) and matching CiteScore (CiteScore: https://github.com/darrennorris/hey-jude/tree/main/data/scopus_citescore). To match, CiteScore comes from a combination of journals in "Nature and Landscape Conservation", "Ecology, Evolution, Behavior and Systematics" and  the following 12:
+The companies classify journals differently and the folder [data](https://github.com/darrennorris/hey-jude/tree/main/data) has JCR impact of  Biodiversity Conservation category journals (JIF https://github.com/darrennorris/hey-jude/tree/main/data/clarivate_JCR) and matching CiteScore (CiteScore: https://github.com/darrennorris/hey-jude/tree/main/data/scopus_citescore). To match, CiteScore comes from a combination of journals in "Nature and Landscape Conservation", "Ecology, Evolution, Behavior and Systematics" and  the following 12:
 African Natural History, Proceedings Of The Linnean Society Of New South Wales, Caribbean Journal Of Science, Urban Ecosystems, Natural History, Revista Chilena De Historia Natural, Polar Biology, Pachyderm, Global Change Biology, Bulletin Of The American Museum Of Natural History, American Museum Novitates, Journal Of Applied Ecology. 
 
 
@@ -59,6 +59,8 @@ Code below loads and joins CiteScore to JIF.
 ```{r load-journal-impact}
 jcr_11a21 <-read_excel("data/clarivate_JCR/JCR2011a2021.xlsx", 
            na = c("", "NA", "N/A")) %>% 
+  mutate(Journal_name = if_else(Journal_name =="Eco mont-Journal on Protected Mountain Areas Research", "Eco.mont", 
+          Journal_name)) %>%
   mutate(name_join = str_to_upper(str_replace_all(Journal_name, "[:punct:]", "")))
 cs_NLC_11a21 <-read_excel("data/scopus_citescore/citescore_NLC_2011a2021.xlsx", 
            na = c("", "NA", "N/A")) %>% 
@@ -76,35 +78,18 @@ cs_NLCECO_11a21 <-read_excel("data/scopus_citescore/citescore_NLC_ECO_2011a2021.
 jcr_11a21 %>% left_join(cs_NLCECO_11a21, 
                         by = c("ayear"="ayear", 
                                "name_join" = "name_join")) -> journals_11a21
-# 13 journals
+# 12 journals. Differences due to differences in journals and coverage years 
+# between databases used to calculate JCR JIF and Scopus CiteScore.
 journals_11a21 %>% 
   group_by(name_join) %>% summarise(count_na = sum(is.na(CiteScore))) %>% 
     filter(count_na >0) %>%
   arrange(desc(count_na)) %>% data.frame
 
 
-
-
 ```
 
-Plot to check.
-```{r plot-journals-year, out.width="70%", out.height="70%", fig.cap= "Trends in indicators of impacts across conservaiton journals."}
-journals_11a21 %>%  
-  mutate(ayear = as.character(ayear)) %>% 
-  select(ayear, name_join, JIF, CiteScore) %>%
-  pivot_longer(cols = c(JIF, CiteScore), names_to = "indicator") %>% 
-  filter(!is.na(value)) %>%
-  #group_by(ayear, indicator) %>% 
-  #summarise(journal_count = length(unique(name_join)),) %>% 
-  ggplot(aes(x=ayear, y=value)) + 
-  geom_point() + 
-  geom_boxplot() +
-  facet_wrap(~indicator, nrow = 2, scales = "free_y")
-```
-
-
-Plot to check. Median impact and number of journals per year.
-```{r plot-journals-year-count, message=FALSE, warning=FALSE,out.width="70%", out.height="70%", fig.cap= "Trends in journal number and indicators of impacts across conservaiton journals. Points are median values with verticle lines showing 95% percentile of value ranges."}
+Calculate descriptive summaries.
+```{r journal-impact-summaries, message=FALSE, warning=FALSE}
 journals_11a21 %>%  
   mutate(ayear = as.character(ayear)) %>% 
   select(ayear, name_join, JIF, CiteScore) %>%
@@ -115,7 +100,41 @@ journals_11a21 %>%
             journal_impact = median(value),
             lq = quantile(value, probs=0.025), 
             uq = quantile(value, probs=0.975)) %>% 
-    ungroup() %>% 
+    ungroup() -> journals_11a21_sum
+# start and end values over time
+count_years <- length(unique(journals_11a21_sum$ayear))
+start_year <- min(journals_11a21_sum$ayear)
+end_year <- max(journals_11a21_sum$ayear)
+journals_11a21_sum %>% filter(ayear==start_year, indicator=="JIF") %>% 
+  pull(journal_impact) -> start_JIF
+journals_11a21_sum %>% filter(ayear==start_year, indicator=="JIF") %>% 
+  pull(journal_count) -> start_count
+journals_11a21_sum %>% filter(ayear==end_year, indicator=="JIF") %>% 
+  pull(journal_impact) -> end_JIF
+journals_11a21_sum %>% filter(ayear==end_year, indicator=="JIF") %>% 
+  pull(journal_count) -> end_count
+
+```
+
+The number of JCR Biodiversity Conservation journals increased from `r start_count` to `r end_count` over  `r count_years` years.
+
+Plot to check.
+```{r plot-journals-year, out.width="70%", out.height="70%", fig.cap= "Trends in indicators of impacts across conservaiton journals."}
+journals_11a21 %>%  
+  mutate(ayear = as.character(ayear)) %>% 
+  select(ayear, name_join, JIF, CiteScore) %>%
+  pivot_longer(cols = c(JIF, CiteScore), names_to = "indicator") %>% 
+    filter(!is.na(value)) %>%
+  ggplot(aes(x=ayear, y=value)) + 
+  geom_point() + 
+  geom_boxplot() +
+  facet_wrap(~indicator, nrow = 2, scales = "free_y")
+```
+
+
+Plot to check. Median impact and number of journals per year.
+```{r plot-journals-year-count, message=FALSE, warning=FALSE,out.width="70%", out.height="70%", fig.cap= "Trends in journal number and indicators of impacts across conservaiton journals. Points are median values with verticle lines showing 95% percentile of value ranges."}
+journals_11a21_sum %>%
   # use group = 1 so lines go through year which is a factor
   ggplot(aes(x=ayear, y=journal_impact, group=1)) + 
   geom_line(colour="blue", linewidth=1) +
