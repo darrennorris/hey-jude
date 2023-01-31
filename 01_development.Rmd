@@ -51,7 +51,7 @@ library(gridExtra)
 ## Journal impact
 
 [Scopus CiteScore](https://www.elsevier.com/solutions/scopus/how-scopus-works/metrics/citescore) and [JCR Journal Impact Factor ("JIF")](https://clarivate.com/webofsciencegroup/solutions/journal-citation-reports/), downloaded on 24 and 23 January 2023 respectively. 
-Using 11 years (2011 to 2021), as 2011 is first year for CiteScore, year when Altmetrics was founded and also follows the definition of conservation threats and actions published in 2008 (Salafsky et. al., 2008 A Standard Lexicon for Biodiversity Conservation: Unified Classifications of Threats and Actions https://doi.org/10.1111/j.1523-1739.2008.00937.x). 
+Using 11 years (2011 to 2021), as 2011 was first year for CiteScore, the year when Altmetrics was founded and also follows the definition of conservation threats and actions published in 2008 (Salafsky et. al., 2008 A Standard Lexicon for Biodiversity Conservation: Unified Classifications of Threats and Actions https://doi.org/10.1111/j.1523-1739.2008.00937.x). 
 The companies classify journals differently and the folder [data](https://github.com/darrennorris/hey-jude/tree/main/data) has JCR impact of  Biodiversity Conservation category journals (JIF https://github.com/darrennorris/hey-jude/tree/main/data/clarivate_JCR) and matching CiteScore (CiteScore: https://github.com/darrennorris/hey-jude/tree/main/data/scopus_citescore). To match, CiteScore comes from a combination of journals in "Nature and Landscape Conservation", "Ecology, Evolution, Behavior and Systematics" and  the following 12:
 African Natural History, Proceedings Of The Linnean Society Of New South Wales, Caribbean Journal Of Science, Urban Ecosystems, Natural History, Revista Chilena De Historia Natural, Polar Biology, Pachyderm, Global Change Biology, Bulletin Of The American Museum Of Natural History, American Museum Novitates, Journal Of Applied Ecology. 
 
@@ -222,7 +222,7 @@ rm("alt_all")
 
 
 Check missing Altmetric values.
-```{r missing-altmetric}
+```{r missing-altmetric, eval=FALSE}
 alt_all <- readRDS("alt_all.rds")
 alt_all %>% 
   filter(is.na(altmetric)) %>% 
@@ -236,6 +236,7 @@ altna_all <- rbind(altna_01, altna_02, altna_03, altna_04, altna_05)
 
 altna_all %>% 
   filter(!is.na(altmetric)) # 0 all NAs second time as well
+saveRDS(altna_all, "altna_all.rds")
 ```
 
 
@@ -244,6 +245,7 @@ Calculate summaries of articles.
 # bibliometrix data.frame has the following
 # AB =  Abstract, DI = doi, SO = journal title, TC = times cited, 
 # TI = article title, PY = publication year 
+wosDN <- readRDS("wosDN.rds")
 wosDN %>% 
   filter(PY %in% study_years) %>% 
   group_by(PY) %>% summarise(count_articles = n()) -> article_summary
