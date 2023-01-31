@@ -1,0 +1,1 @@
+safe_altmetrics <- purrr::safely(altmetrics_new, otherwise = NA)

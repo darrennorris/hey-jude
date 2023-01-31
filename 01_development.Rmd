@@ -180,7 +180,40 @@ wosDN <- mergeDbSourcesDN(lwos, remove.duplicated=TRUE)
 
 ```
 
-Calculate summaries
+Add altmetrics. To complete.
+```{r add-altmetrics}
+# Politely import altmetrics. "rAltmetrics" retired. "dimensionsR" active.
+# 1) helper functions
+source("R/altmetrics_updated.R")
+source("R/safe_altmetrics.R")
+source("R/get_altm.R")
+
+# 2) get altmetrics
+# split to avoid API and internet connection issues
+alt01 <- plyr::adply(wosDN[1:500, ], .margins = 1, .fun = get_altm)
+alt02 <- plyr::adply(wosDN[501:1000, ], .margins = 1, .fun = get_altm)
+alt03 <- plyr::adply(wosDN[1001:2000, ], .margins = 1, .fun = get_altm)
+alt04 <- plyr::adply(wosDN[2001:3000, ], .margins = 1, .fun = get_altm)
+alt05 <- plyr::adply(wosDN[3001:4000, ], .margins = 1, .fun = get_altm)
+alt06 <- plyr::adply(wosDN[4001:5000, ], .margins = 1, .fun = get_altm)
+alt07 <- plyr::adply(wosDN[5001:6000, ], .margins = 1, .fun = get_altm)
+alt08 <- plyr::adply(wosDN[6001:7000, ], .margins = 1, .fun = get_altm)
+alt09 <- plyr::adply(wosDN[7001:8000, ], .margins = 1, .fun = get_altm)
+alt10 <- plyr::adply(wosDN[8001:9000, ], .margins = 1, .fun = get_altm)
+alt11 <- plyr::adply(wosDN[9001:10000, ], .margins = 1, .fun = get_altm)
+alt12 <- plyr::adply(wosDN[10001:11000, ], .margins = 1, .fun = get_altm)
+alt13 <- plyr::adply(wosDN[11001:12000, ], .margins = 1, .fun = get_altm)
+alt14 <- plyr::adply(wosDN[12001:13000, ], .margins = 1, .fun = get_altm)
+alt15 <- plyr::adply(wosDN[13001:14000, ], .margins = 1, .fun = get_altm)
+alt16 <- plyr::adply(wosDN[14001:15000, ], .margins = 1, .fun = get_altm)
+alt17 <- plyr::adply(wosDN[15001:16000, ], .margins = 1, .fun = get_altm)
+alt18 <- plyr::adply(wosDN[16001:16795, ], .margins = 1, .fun = get_altm)
+alt <- rbind(alt01, alt02, alt03, alt04, alt05, alt06, alt07, alt08, alt09, alt10, 
+             alt11, alt12, alt13, alt14, alt15, alt16, alt17, alt18)
+```
+
+
+Calculate summaries of articles.
 ```{r article-summaries}
 # bibliometrix data.frame has the following
 # AB =  Abstract, DI = doi, SO = journal title, TC = times cited, 
