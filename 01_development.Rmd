@@ -51,7 +51,7 @@ library(gridExtra)
 ## Journal impact
 
 [Scopus CiteScore](https://www.elsevier.com/solutions/scopus/how-scopus-works/metrics/citescore) and [JCR Journal Impact Factor ("JIF")](https://clarivate.com/webofsciencegroup/solutions/journal-citation-reports/), downloaded on 24 and 23 January 2023 respectively. 
-Using 11 years (2011 to 2021), as 2011 is first year for CiteScore and also follows the definition of conservation threats and actions published in 2008 (Salafsky et. al., 2008 A Standard Lexicon for Biodiversity Conservation: Unified Classifications of Threats and Actions https://doi.org/10.1111/j.1523-1739.2008.00937.x). 
+Using 11 years (2011 to 2021), as 2011 is first year for CiteScore, year when Altmetrics was founded and also follows the definition of conservation threats and actions published in 2008 (Salafsky et. al., 2008 A Standard Lexicon for Biodiversity Conservation: Unified Classifications of Threats and Actions https://doi.org/10.1111/j.1523-1739.2008.00937.x). 
 The companies classify journals differently and the folder [data](https://github.com/darrennorris/hey-jude/tree/main/data) has JCR impact of  Biodiversity Conservation category journals (JIF https://github.com/darrennorris/hey-jude/tree/main/data/clarivate_JCR) and matching CiteScore (CiteScore: https://github.com/darrennorris/hey-jude/tree/main/data/scopus_citescore). To match, CiteScore comes from a combination of journals in "Nature and Landscape Conservation", "Ecology, Evolution, Behavior and Systematics" and  the following 12:
 African Natural History, Proceedings Of The Linnean Society Of New South Wales, Caribbean Journal Of Science, Urban Ecosystems, Natural History, Revista Chilena De Historia Natural, Polar Biology, Pachyderm, Global Change Biology, Bulletin Of The American Museum Of Natural History, American Museum Novitates, Journal Of Applied Ecology. 
 
@@ -82,7 +82,7 @@ jcr_11a21 %>% left_join(cs_NLCECO_11a21,
 # 12 journals. Differences due to differences in journals and coverage years 
 # between databases used to calculate JCR JIF and Scopus CiteScore.
 journals_11a21 %>% 
-  group_by(name_join) %>% summarise(count_na = sum(is.na(CiteScore))) %>% 
+  group_by(Journal_name, name_join) %>% summarise(count_na = sum(is.na(CiteScore))) %>% 
     filter(count_na >0) %>%
   arrange(desc(count_na)) %>% data.frame
 
@@ -161,7 +161,7 @@ library(metagear)
 
 
 Load bibliographic data from WOS core collection.
-```{r load-search, message=FALSE, warning=FALSE}
+```{r load-search, message=FALSE, warning=FALSE, eval=FALSE}
 # 1) helper functions
 # file names
 source("R/get_files.R")
@@ -176,6 +176,9 @@ df_files_wos <- get_files(folder_name = infolder)
 lwos <- plyr::alply(df_files_wos, .margins = 1, .fun = load_bib)
 # 16795 ( 1 duplicate removed)
 wosDN <- mergeDbSourcesDN(lwos, remove.duplicated=TRUE)
+saveRDS(wosDN, "wosDN.rds")
+rm("lwos")
+rm("wosDN")
 
 ```
 
@@ -188,6 +191,8 @@ source("R/safe_altmetrics.R")
 source("R/get_altm.R")
 
 # 2) get altmetrics
+wosDN <- readRDS("wosDN.rds")
+
 # split to avoid API and internet connection issues
 alt01 <- plyr::adply(wosDN[1:500, ], .margins = 1, .fun = get_altm)
 alt02 <- plyr::adply(wosDN[501:1000, ], .margins = 1, .fun = get_altm)
@@ -207,8 +212,30 @@ alt15 <- plyr::adply(wosDN[13001:14000, ], .margins = 1, .fun = get_altm)
 alt16 <- plyr::adply(wosDN[14001:15000, ], .margins = 1, .fun = get_altm)
 alt17 <- plyr::adply(wosDN[15001:16000, ], .margins = 1, .fun = get_altm)
 alt18 <- plyr::adply(wosDN[16001:16795, ], .margins = 1, .fun = get_altm)
-alt <- rbind(alt01, alt02, alt03, alt04, alt05, alt06, alt07, alt08, alt09, alt10, 
+# Results for all 16795
+alt_all <- rbind(alt01, alt02, alt03, alt04, alt05, alt06, alt07, alt08, alt09, alt10, 
              alt11, alt12, alt13, alt14, alt15, alt16, alt17, alt18)
+#Export for future use.
+saveRDS(alt_all, "alt_all.rds")
+rm("alt_all")
+```
+
+
+Check missing Altmetric values.
+```{r missing-altmetric}
+alt_all <- readRDS("alt_all.rds")
+alt_all %>% 
+  filter(is.na(altmetric)) %>% 
+  select(!c(altmetric, altmetric_3m)) -> alt_na #4359
+altna_01 <- plyr::adply(alt_na[1:200, ], .margins = 1, .fun = get_altm)
+altna_02 <- plyr::adply(alt_na[201:400, ], .margins = 1, .fun = get_altm)
+altna_03 <- plyr::adply(alt_na[401:600, ], .margins = 1, .fun = get_altm)
+altna_04 <- plyr::adply(alt_na[601:800, ], .margins = 1, .fun = get_altm)
+altna_05 <- plyr::adply(alt_na[801:1000, ], .margins = 1, .fun = get_altm)
+altna_all <- rbind(altna_01, altna_02, altna_03, altna_04, altna_05)
+
+altna_all %>% 
+  filter(!is.na(altmetric)) # 0 all NAs second time as well
 ```
 
 
