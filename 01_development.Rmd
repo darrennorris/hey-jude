@@ -41,6 +41,7 @@ knit_hooks$set(output = function(x, options) {
 # Load and prep data
 ## Packages
 ```{r load-packages, warning=FALSE, message=FALSE}
+library(plyr) # plyr b4 tidyverse
 library(tidyverse)
 library(stringr)
 library(readxl)
@@ -133,7 +134,7 @@ journals_11a21 %>%
 
 
 Plot to check. Median impact and number of journals per year.
-```{r plot-journals-year-count, message=FALSE, warning=FALSE,out.width="70%", out.height="70%", fig.cap= "Trends in journal number and indicators of impacts across conservaiton journals. Points are median values with verticle lines showing 95% percentile of value ranges."}
+```{r plot-journals-year-count, message=FALSE, warning=FALSE,out.width="70%", out.height="70%", fig.cap= "Trends in journal number and indicators of impact across conservaiton journals. Points are median values with verticle lines showing 95% interval of value ranges (0.025 - 0.975 quantile range)."}
 journals_11a21_sum %>%
   # use group = 1 so lines go through year which is a factor
   ggplot(aes(x=ayear, y=journal_impact, group=1)) + 
@@ -145,3 +146,103 @@ journals_11a21_sum %>%
   labs(x="year", 
        y="impact indicator value")
 ```
+
+## Literature search results
+
+Load bibliometric packages.
+```{r load-packages-bibliometrics, message=FALSE, warning=FALSE}
+library(bibliometrix)
+library(rcrossref)
+library(rAltmetric)
+library(metagear)
+
+```
+
+
+Load bibliographic data
+```{r load-search}
+# WOS core collection. AB =  Abstract, DI = doi, SO = journal title, TC = times cited, 
+# TI = article title, PY = publication year, 
+
+# 1) helper functions
+# file names
+get_files <- function(folder_name = NA) {
+  library(tidyverse)
+  folder_location <- folder_name
+  in_files <- list.files(folder_location, 
+                         pattern = ".bib", full.names = TRUE)
+  data.frame(folder_id = folder_location, file_id = in_files) %>%  
+    group_by(folder_id, file_id) %>% 
+    summarise(file_count = n()) %>% 
+    ungroup() -> df_files
+  return(df_files)
+}
+# load files
+load_bib <- function(x){ 
+  myrefs <- bibliometrix::convert2df(file = x$file_id, dbsource = "wos", 
+                                           format = "bibtex") 
+  myrefs
+}
+# update mergeDbSources to work with list object
+mergeDbSourcesDN <- function(x,remove.duplicated=TRUE){
+
+###
+  L <- x
+  
+  n=length(L)
+  
+  Tags=names(L[[1]])
+
+  ## identification of common tags
+  for (j in 2:n){
+    Tags=intersect(Tags,names(L[[j]]))
+  }
+  #####
+  M=data.frame(matrix(NA,1,length(Tags)))
+  names(M)=Tags
+  for (j in 1:n){
+    L[[j]]=L[[j]][,Tags]
+    
+    M=rbind(M,L[[j]])
+  }
+  
+  ## author data cleaning
+  if ("AU" %in% Tags){
+    M$AU=gsub(","," ",M$AU)
+    AUlist=strsplit(M$AU,";")
+    AU=lapply(AUlist,function(l){
+      l=trim(l)
+      name=strsplit(l," ")
+      lastname=unlist(lapply(name,function(ln){ln[1]}))
+      firstname=lapply(name,function(ln){
+        f=paste(substr(ln[-1],1,1),collapse=" ")
+        })
+      AU=paste(lastname,unlist(firstname),sep=" ",collapse=";")
+      return(AU)
+    })
+    M$AU=unlist(AU)
+    
+  }
+  M=M[-1,]
+  M$DB="ISI"
+  
+  if (isTRUE(remove.duplicated)){
+    M$TI=gsub("[^[:alnum:] ]","",M$TI)
+    M$TI=gsub("(?<=[\\s])\\s*|^\\s+|\\s+$", "", M$TI, perl=TRUE)
+    d=duplicated(M$TI)
+    cat("\n",sum(d),"duplicated documents have been removed\n")
+    M=M[!d,]
+  }
+  class(M) <- c("bibliometrixDB", "data.frame")
+  return(M)
+}
+
+# 2) import 
+infolder <- "data/wos_20230130/"
+df_files_wos <- get_files(folder_name = infolder)
+lwos <- plyr::alply(df_files_wos, .margins = 1, .fun = load_bib)
+# 16795 ( 1 duplicate removed)
+wosDN <- mergeDbSourcesDN(lwos, remove.duplicated=TRUE)
+
+```
+
