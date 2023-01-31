@@ -327,6 +327,11 @@ ab_sent_senti %>%
             sentiment_max = round(max(ave_sentiment),4), 
             sentiment_med = round(median(ave_sentiment),3),
             sentiment_sd = round(sd(ave_sentiment),3)) -> ab_sent_senti
+# add sentiment to abstracts
+alt_all %>% 
+  left_join(ab_sent_senti) -> all_alti_senti
+
+saveRDS(all_alti_senti, "data/all_alti_senti.RDS")
 
 ```
 
