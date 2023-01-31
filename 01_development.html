@@ -1494,7 +1494,7 @@ library(gridExtra)</code></pre>
 <div id="journal-impact" class="section level2" number="1.2">
 <h2><span class="header-section-number">1.2</span> Journal impact</h2>
 <p><a href="https://www.elsevier.com/solutions/scopus/how-scopus-works/metrics/citescore">Scopus CiteScore</a> and <a href="https://clarivate.com/webofsciencegroup/solutions/journal-citation-reports/">JCR Journal Impact Factor (“JIF”)</a>, downloaded on 24 and 23 January 2023 respectively.
-Using 11 years (2011 to 2021), as 2011 is first year for CiteScore, year when Altmetrics was founded and also follows the definition of conservation threats and actions published in 2008 (Salafsky et. al., 2008 A Standard Lexicon for Biodiversity Conservation: Unified Classifications of Threats and Actions <a href="https://doi.org/10.1111/j.1523-1739.2008.00937.x" class="uri">https://doi.org/10.1111/j.1523-1739.2008.00937.x</a>).
+Using 11 years (2011 to 2021), as 2011 was first year for CiteScore, the year when Altmetrics was founded and also follows the definition of conservation threats and actions published in 2008 (Salafsky et. al., 2008 A Standard Lexicon for Biodiversity Conservation: Unified Classifications of Threats and Actions <a href="https://doi.org/10.1111/j.1523-1739.2008.00937.x" class="uri">https://doi.org/10.1111/j.1523-1739.2008.00937.x</a>).
 The companies classify journals differently and the folder <a href="https://github.com/darrennorris/hey-jude/tree/main/data">data</a> has JCR impact of Biodiversity Conservation category journals (JIF <a href="https://github.com/darrennorris/hey-jude/tree/main/data/clarivate_JCR" class="uri">https://github.com/darrennorris/hey-jude/tree/main/data/clarivate_JCR</a>) and matching CiteScore (CiteScore: <a href="https://github.com/darrennorris/hey-jude/tree/main/data/scopus_citescore" class="uri">https://github.com/darrennorris/hey-jude/tree/main/data/scopus_citescore</a>). To match, CiteScore comes from a combination of journals in “Nature and Landscape Conservation”, “Ecology, Evolution, Behavior and Systematics” and the following 12:
 African Natural History, Proceedings Of The Linnean Society Of New South Wales, Caribbean Journal Of Science, Urban Ecosystems, Natural History, Revista Chilena De Historia Natural, Polar Biology, Pachyderm, Global Change Biology, Bulletin Of The American Museum Of Natural History, American Museum Novitates, Journal Of Applied Ecology.</p>
 <p>Code below loads and joins CiteScore to JIF.</p>
@@ -1609,7 +1609,7 @@ df_files_wos &lt;- get_files(folder_name = infolder)
 lwos &lt;- plyr::alply(df_files_wos, .margins = 1, .fun = load_bib)
 # 16795 ( 1 duplicate removed)
 wosDN &lt;- mergeDbSourcesDN(lwos, remove.duplicated=TRUE)
-saveRDS(wosDN, &quot;wosDN.rds&quot;)
+saveRDS(wosDN, &quot;data/wosDN.rds&quot;)
 rm(&quot;lwos&quot;)
 rm(&quot;wosDN&quot;)
 </code></pre>
@@ -1621,7 +1621,7 @@ source(&quot;R/safe_altmetrics.R&quot;)
 source(&quot;R/get_altm.R&quot;)
 
 # 2) get altmetrics
-wosDN &lt;- readRDS(&quot;wosDN.rds&quot;)
+wosDN &lt;- readRDS(&quot;data/wosDN.rds&quot;)
 
 # split to avoid API and internet connection issues
 alt01 &lt;- plyr::adply(wosDN[1:500, ], .margins = 1, .fun = get_altm)
@@ -1646,10 +1646,10 @@ alt18 &lt;- plyr::adply(wosDN[16001:16795, ], .margins = 1, .fun = get_altm)
 alt_all &lt;- rbind(alt01, alt02, alt03, alt04, alt05, alt06, alt07, alt08, alt09, alt10, 
              alt11, alt12, alt13, alt14, alt15, alt16, alt17, alt18)
 #Export for future use.
-saveRDS(alt_all, &quot;alt_all.rds&quot;)
+saveRDS(alt_all, &quot;data/alt_all.rds&quot;)
 rm(&quot;alt_all&quot;)</code></pre>
 <p>Check missing Altmetric values.</p>
-<pre class="r"><code>alt_all &lt;- readRDS(&quot;alt_all.rds&quot;)
+<pre class="r"><code>alt_all &lt;- readRDS(&quot;data/alt_all.rds&quot;)
 alt_all %&gt;% 
   filter(is.na(altmetric)) %&gt;% 
   select(!c(altmetric, altmetric_3m)) -&gt; alt_na #4359
@@ -1662,12 +1662,12 @@ altna_all &lt;- rbind(altna_01, altna_02, altna_03, altna_04, altna_05)
 
 altna_all %&gt;% 
   filter(!is.na(altmetric)) # 0 all NAs second time as well
-saveRDS(altna_all, &quot;altna_all.rds&quot;)</code></pre>
+saveRDS(altna_all, &quot;data/altna_all.rds&quot;)</code></pre>
 <p>Calculate summaries of articles.</p>
 <pre class="r"><code># bibliometrix data.frame has the following
 # AB =  Abstract, DI = doi, SO = journal title, TC = times cited, 
 # TI = article title, PY = publication year 
-wosDN &lt;- readRDS(&quot;wosDN.rds&quot;)
+wosDN &lt;- readRDS(&quot;data/wosDN.rds&quot;)
 wosDN %&gt;% 
   filter(PY %in% study_years) %&gt;% 
   group_by(PY) %&gt;% summarise(count_articles = n()) -&gt; article_summary

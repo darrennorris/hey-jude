@@ -176,7 +176,7 @@ df_files_wos <- get_files(folder_name = infolder)
 lwos <- plyr::alply(df_files_wos, .margins = 1, .fun = load_bib)
 # 16795 ( 1 duplicate removed)
 wosDN <- mergeDbSourcesDN(lwos, remove.duplicated=TRUE)
-saveRDS(wosDN, "wosDN.rds")
+saveRDS(wosDN, "data/wosDN.rds")
 rm("lwos")
 rm("wosDN")
 
@@ -191,7 +191,7 @@ source("R/safe_altmetrics.R")
 source("R/get_altm.R")
 
 # 2) get altmetrics
-wosDN <- readRDS("wosDN.rds")
+wosDN <- readRDS("data/wosDN.rds")
 
 # split to avoid API and internet connection issues
 alt01 <- plyr::adply(wosDN[1:500, ], .margins = 1, .fun = get_altm)
@@ -216,14 +216,14 @@ alt18 <- plyr::adply(wosDN[16001:16795, ], .margins = 1, .fun = get_altm)
 alt_all <- rbind(alt01, alt02, alt03, alt04, alt05, alt06, alt07, alt08, alt09, alt10, 
              alt11, alt12, alt13, alt14, alt15, alt16, alt17, alt18)
 #Export for future use.
-saveRDS(alt_all, "alt_all.rds")
+saveRDS(alt_all, "data/alt_all.rds")
 rm("alt_all")
 ```
 
 
 Check missing Altmetric values.
 ```{r missing-altmetric, eval=FALSE}
-alt_all <- readRDS("alt_all.rds")
+alt_all <- readRDS("data/alt_all.rds")
 alt_all %>% 
   filter(is.na(altmetric)) %>% 
   select(!c(altmetric, altmetric_3m)) -> alt_na #4359
@@ -236,7 +236,7 @@ altna_all <- rbind(altna_01, altna_02, altna_03, altna_04, altna_05)
 
 altna_all %>% 
   filter(!is.na(altmetric)) # 0 all NAs second time as well
-saveRDS(altna_all, "altna_all.rds")
+saveRDS(altna_all, "data/altna_all.rds")
 ```
 
 
@@ -245,7 +245,7 @@ Calculate summaries of articles.
 # bibliometrix data.frame has the following
 # AB =  Abstract, DI = doi, SO = journal title, TC = times cited, 
 # TI = article title, PY = publication year 
-wosDN <- readRDS("wosDN.rds")
+wosDN <- readRDS("data/wosDN.rds")
 wosDN %>% 
   filter(PY %in% study_years) %>% 
   group_by(PY) %>% summarise(count_articles = n()) -> article_summary
