@@ -160,9 +160,8 @@ library(metagear)
 ```
 
 
-Load bibliographic data
+Load bibliographic data from WOS core collection.
 ```{r load-search, message=FALSE, warning=FALSE}
-# Load from WOS core collection. 
 # 1) helper functions
 # file names
 source("R/get_files.R")
@@ -181,7 +180,7 @@ wosDN <- mergeDbSourcesDN(lwos, remove.duplicated=TRUE)
 ```
 
 Add altmetrics. To complete.
-```{r add-altmetrics}
+```{r add-altmetrics, eval=FALSE}
 # Politely import altmetrics. "rAltmetrics" retired. "dimensionsR" active.
 # 1) helper functions
 source("R/altmetrics_updated.R")
