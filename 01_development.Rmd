@@ -46,6 +46,7 @@ library(tidyverse)
 library(stringr)
 library(readxl)
 library(gridExtra)
+library(magrittr)
 ```
 
 ## Journal impact
@@ -273,5 +274,44 @@ article_summary %>%
               linetype = "dashed") +
   labs(x="year", 
        y="article count")
+```
+
+
+# Sentiment analysis
+
+```{r test-sentiment, eval=FALSE}
+library(sentimentr)
+alt_all <- readRDS("data/alt_all.rds")
+
+doi_positive <- "10.1016/j.biocon.2019.02.022"
+alt_all %>% 
+  filter(DI==doi_positive) %>% pull(AB) -> abstract_positive
+
+mytext <- sentimentr::get_sentences(abstract_positive)
+sentiment(mytext)
+
+
+alt_all[1:6, ] %>% 
+  filter(!is.na(AB), !is.na(DI)) %>%
+    get_sentences() %$%
+    sentiment_by(AB, list(DI))
+
+#171298 sentances
+alt_all %>% 
+  filter(!is.na(AB), !is.na(DI)) %>% 
+  select(DI, AB) %>%
+    dplyr::mutate(ab_split = get_sentences(AB)) %>% 
+  unnest_longer(ab_split) -> abstract_sentances
+
+saveRDS(abstract_sentances, "data/abstract_sentances.rds")
+abstract_sentances %$%
+    sentiment_by(ab_split) -> abstract_sentances_sentiment
+bind_cols(abstract_sentances, abstract_sentances_sentiment) -> ab_sent_senti
+saveRDS(ab_sent_senti, "data/ab_sent_senti.rds")
+
+rm("abstract_sentances")
+rm("abstract_sentances_sentiment")
+rm("ab_sent_senti")
+
 ```
 
