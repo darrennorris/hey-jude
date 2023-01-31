@@ -91,6 +91,7 @@ journals_11a21 %>%
 
 Calculate descriptive summaries.
 ```{r journal-impact-summaries, message=FALSE, warning=FALSE}
+study_years <- c(2011:2021)
 journals_11a21 %>%  
   mutate(ayear = as.character(ayear)) %>% 
   select(ayear, name_join, JIF, CiteScore) %>%
@@ -117,9 +118,9 @@ journals_11a21_sum %>% filter(ayear==end_year, indicator=="JIF") %>%
 
 ```
 
-The number of JCR Biodiversity Conservation journals increased from `r start_count` to `r end_count` over  `r count_years` years.
+Temporal trends in journals. The number of JCR Biodiversity Conservation journals increased from `r start_count` to `r end_count` over  `r count_years` years.
 
-Plot to check.
+Plot to check patterns in journal impact.
 ```{r plot-journals-year, out.width="70%", out.height="70%", fig.cap= "Trends in indicators of impacts across conservaiton journals."}
 journals_11a21 %>%  
   mutate(ayear = as.character(ayear)) %>% 
@@ -160,89 +161,56 @@ library(metagear)
 
 
 Load bibliographic data
-```{r load-search}
-# WOS core collection. AB =  Abstract, DI = doi, SO = journal title, TC = times cited, 
-# TI = article title, PY = publication year, 
-
+```{r load-search, message=FALSE, warning=FALSE}
+# Load from WOS core collection. 
 # 1) helper functions
 # file names
-get_files <- function(folder_name = NA) {
-  library(tidyverse)
-  folder_location <- folder_name
-  in_files <- list.files(folder_location, 
-                         pattern = ".bib", full.names = TRUE)
-  data.frame(folder_id = folder_location, file_id = in_files) %>%  
-    group_by(folder_id, file_id) %>% 
-    summarise(file_count = n()) %>% 
-    ungroup() -> df_files
-  return(df_files)
-}
+source("R/get_files.R")
 # load files
-load_bib <- function(x){ 
-  myrefs <- bibliometrix::convert2df(file = x$file_id, dbsource = "wos", 
-                                           format = "bibtex") 
-  myrefs
-}
-# update mergeDbSources to work with list object
-mergeDbSourcesDN <- function(x,remove.duplicated=TRUE){
+source("R/load_bib.R")
+# hack bibliometrix::mergeDbSources to work with list object
+source("R/mergeDbSourcesDN.R")
 
-###
-  L <- x
-  
-  n=length(L)
-  
-  Tags=names(L[[1]])
-
-  ## identification of common tags
-  for (j in 2:n){
-    Tags=intersect(Tags,names(L[[j]]))
-  }
-  #####
-  M=data.frame(matrix(NA,1,length(Tags)))
-  names(M)=Tags
-  for (j in 1:n){
-    L[[j]]=L[[j]][,Tags]
-    
-    M=rbind(M,L[[j]])
-  }
-  
-  ## author data cleaning
-  if ("AU" %in% Tags){
-    M$AU=gsub(","," ",M$AU)
-    AUlist=strsplit(M$AU,";")
-    AU=lapply(AUlist,function(l){
-      l=trim(l)
-      name=strsplit(l," ")
-      lastname=unlist(lapply(name,function(ln){ln[1]}))
-      firstname=lapply(name,function(ln){
-        f=paste(substr(ln[-1],1,1),collapse=" ")
-        })
-      AU=paste(lastname,unlist(firstname),sep=" ",collapse=";")
-      return(AU)
-    })
-    M$AU=unlist(AU)
-    
-  }
-  M=M[-1,]
-  M$DB="ISI"
-  
-  if (isTRUE(remove.duplicated)){
-    M$TI=gsub("[^[:alnum:] ]","",M$TI)
-    M$TI=gsub("(?<=[\\s])\\s*|^\\s+|\\s+$", "", M$TI, perl=TRUE)
-    d=duplicated(M$TI)
-    cat("\n",sum(d),"duplicated documents have been removed\n")
-    M=M[!d,]
-  }
-  class(M) <- c("bibliometrixDB", "data.frame")
-  return(M)
-}
-
-# 2) import 
+# 2) import and create bibliografic data.frame
 infolder <- "data/wos_20230130/"
 df_files_wos <- get_files(folder_name = infolder)
 lwos <- plyr::alply(df_files_wos, .margins = 1, .fun = load_bib)
 # 16795 ( 1 duplicate removed)
 wosDN <- mergeDbSourcesDN(lwos, remove.duplicated=TRUE)
 
+```
+
+Calculate summaries
+```{r article-summaries}
+# bibliometrix data.frame has the following
+# AB =  Abstract, DI = doi, SO = journal title, TC = times cited, 
+# TI = article title, PY = publication year 
+wosDN %>% 
+  filter(PY %in% study_years) %>% 
+  group_by(PY) %>% summarise(count_articles = n()) -> article_summary
+# start and end values over time
+count_years_articles <- length(unique(article_summary$PY))
+start_year_articles <- min(article_summary$PY)
+end_year_articles <- max(article_summary$PY)
+
+start_count_articles <- article_summary %>% filter(PY==start_year_articles) %>% 
+  pull(count_articles)
+end_count_articles <- article_summary %>% filter(PY==end_year_articles) %>% 
+  pull(count_articles)
+
+```
+
+
+Temporal trends in article count of vertebrate studies. 
+The number of articles published per year in JCR Biodiversity Conservation journals more than doubled from `r start_count_articles` to `r end_count_articles` over  `r count_years_articles` years.
+```{r plot-articles-year-count, message=FALSE, warning=FALSE,out.width="70%", out.height="70%", fig.cap= "Trends in article number across conservaiton journals. Points show published articles per year. Dashed line predictions from GLM (poisson family) and shaded areas 95% CI to aid visual interpretation."}
+# use 2011 - 2021. Update with 2022 articles after May 2023.
+article_summary %>% 
+  ggplot(aes(x=PY, y=count_articles)) + 
+  geom_point() + 
+  stat_smooth(method = "glm", method.args = list(family = 'poisson'), 
+              linetype = "dashed") +
+  labs(x="year", 
+       y="article count")
 ```
 
