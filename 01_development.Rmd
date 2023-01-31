@@ -316,7 +316,7 @@ rm("ab_sent_senti")
 ```
 
 Take a look at sentiment stuff
-```{r plot-sentiment}
+```{r join-abstract-sentiment}
 # summarise sentiment by abstract
 ab_sent_senti <- readRDS("data/ab_sent_senti.rds")
 ab_sent_senti %>% 
@@ -332,6 +332,30 @@ alt_all %>%
   left_join(ab_sent_senti) -> all_alti_senti
 
 saveRDS(all_alti_senti, "data/all_alti_senti.RDS")
+write.csv(all_alti_senti, "data/all_alti_senti.csv")
 
+```
+
+Summaries of sentiment
+```{r abstract-sentiment-summary}
+# check for differences in counts of journal names. Same journal changes name etc?
+# Need to standardize journal names in WOS search results.
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), PY %in% study_years) %>% pull(SO) %>% 
+  unique() %>% length() -> journal_count_ab # 81
+jcr_11a21 %>% 
+  filter(ayear %in% study_years) %>% pull(Journal_name) %>% 
+  unique() %>% length() -> journal_count_jcr # 73
+jcr_11a21 %>% 
+  filter(ayear %in% study_years) %>% pull(ISSN) %>% 
+  unique() %>% length() -> journal_count_issn # 69
+
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), PY %in% study_years) %>% pull(DI) %>% 
+  unique() %>% length() #14330
+
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), PY %in% study_years) %>% pull(DI) %>% 
+  unique() %>% length() -> article_count_doi#14330
 ```
 
