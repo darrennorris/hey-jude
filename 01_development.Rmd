@@ -315,3 +315,18 @@ rm("ab_sent_senti")
 
 ```
 
+Take a look at sentiment stuff
+```{r plot-sentiment}
+# summarise sentiment by abstract
+ab_sent_senti <- readRDS("data/ab_sent_senti.rds")
+ab_sent_senti %>% 
+  group_by(DI, AB) %>% 
+  summarise(ab_word_count = sum(word_count), 
+            ab_sentance_count = n(), 
+            sentiment_min = round(min(ave_sentiment),4), 
+            sentiment_max = round(max(ave_sentiment),4), 
+            sentiment_med = round(median(ave_sentiment),3),
+            sentiment_sd = round(sd(ave_sentiment),3)) -> ab_sent_senti
+
+```
+
