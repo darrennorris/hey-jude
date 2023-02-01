@@ -333,7 +333,8 @@ alt_all %>%
 
 saveRDS(all_alti_senti, "data/all_alti_senti.RDS")
 write.csv(all_alti_senti, "data/all_alti_senti.csv")
-
+#rm(ab_sent_senti)
+#rm(alt_all)
 ```
 
 Summaries of sentiment
