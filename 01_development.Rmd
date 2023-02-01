@@ -316,7 +316,7 @@ rm("ab_sent_senti")
 ```
 
 Take a look at sentiment stuff
-```{r join-abstract-sentiment}
+```{r join-abstract-sentiment, eval=FALSE}
 # summarise sentiment by abstract
 ab_sent_senti <- readRDS("data/ab_sent_senti.rds")
 ab_sent_senti %>% 
@@ -340,6 +340,7 @@ Summaries of sentiment
 ```{r abstract-sentiment-summary}
 # check for differences in counts of journal names. Same journal changes name etc?
 # Need to standardize journal names in WOS search results.
+all_alti_senti <- readRDS("data/all_alti_senti.RDS")
 all_alti_senti %>% 
   filter(!is.na(AB), !is.na(DI), PY %in% study_years) %>% pull(SO) %>% 
   unique() %>% length() -> journal_count_ab # 81
@@ -357,5 +358,46 @@ all_alti_senti %>%
 all_alti_senti %>% 
   filter(!is.na(AB), !is.na(DI), PY %in% study_years) %>% pull(DI) %>% 
   unique() %>% length() -> article_count_doi#14330
+
+#alt_all %>% 
+#  filter(!is.na(AB), !is.na(DI), PY %in% study_years) %>% pull(DI) %>% 
+#  unique() %>% length() #14330
+
+all_alti_senti %>%
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric),PY %in% study_years) %>% 
+  pull(DI) %>% 
+  unique() %>% length() # 10395
+all_alti_senti %>%
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), 
+         !is.na(TC),PY %in% study_years) %>% 
+  pull(DI) %>% 
+  unique() %>% length() # 10395
+```
+
+Plot to see.
+```{r plot-sentiment-year, fig.height=5, fig.width=4}
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years) %>%
+  ggplot(aes(x=factor(PY), y=sentiment_med)) + 
+  geom_point() + 
+  geom_violin(draw_quantiles = 0.5) + 
+  coord_flip() + 
+  labs(x="year", y="sentiment")
+```
+
+Relationship between article impact and sentiment.
+
+```{r plot-article-impact-sentiment, fig.height=6, fig.width=5}
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years) %>% 
+  select(PY, altmetric, TC, sentiment_med) %>% 
+  mutate(year = factor(PY)) %>% 
+  pivot_longer(cols = c(altmetric, TC)) %>% 
+  mutate(name = if_else(name=="TC", "times cited", name)) %>%
+  ggplot(aes(x=value, y = sentiment_med)) + 
+  geom_point() + 
+  geom_smooth(method = "gam")+
+  facet_grid(year~name, scales = "free_x") + 
+  labs(x="article impact", y="Abstract sentiment")
 ```
 
