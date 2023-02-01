@@ -41,7 +41,7 @@ knit_hooks$set(output = function(x, options) {
 # Load and prep data
 ## Packages
 ```{r load-packages, warning=FALSE, message=FALSE}
-library(plyr) # plyr b4 tidyverse
+library(plyr) # plyr before tidyverse
 library(tidyverse)
 library(stringr)
 library(readxl)
@@ -279,10 +279,13 @@ article_summary %>%
 
 # Sentiment analysis
 
+May need to also use custom classifier (e.g. Twitter optimism https://doi.org/10.1098/rsos.190473), machine learning available via [superml](https://github.com/saraswatmks/superml).
+
 ```{r test-sentiment, eval=FALSE}
 library(sentimentr)
 alt_all <- readRDS("data/alt_all.rds")
 
+# Test on an optimistic example
 doi_positive <- "10.1016/j.biocon.2019.02.022"
 alt_all %>% 
   filter(DI==doi_positive) %>% pull(AB) -> abstract_positive
@@ -290,7 +293,7 @@ alt_all %>%
 mytext <- sentimentr::get_sentences(abstract_positive)
 sentiment(mytext)
 
-
+# Abstracts
 alt_all[1:6, ] %>% 
   filter(!is.na(AB), !is.na(DI)) %>%
     get_sentences() %$%
@@ -312,6 +315,24 @@ saveRDS(ab_sent_senti, "data/ab_sent_senti.rds")
 rm("abstract_sentances")
 rm("abstract_sentances_sentiment")
 rm("ab_sent_senti")
+
+# Titles
+alt_all[1:6, ] %>%
+    get_sentences() %$%
+    sentiment_by(TI, list(AU, PY, DI)) -> title_sent
+uncombine(title_sent)
+
+alt_all %>% 
+  filter(!is.na(TI), !is.na(DI)) %>% 
+  select(DI, TI) %>%
+    dplyr::mutate(title_split = get_sentences(TI)) %>% 
+  unnest_longer(title_split) -> title_sentances
+
+title_sentances %$%
+    sentiment_by(title_split) -> title_sentances_sentiment
+
+bind_cols(title_sentances, title_sentances_sentiment) -> title_sent_senti
+saveRDS(title_sent_senti, "data/title_sent_senti.rds")
 
 ```
 
