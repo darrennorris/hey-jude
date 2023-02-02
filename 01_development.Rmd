@@ -310,17 +310,22 @@ saveRDS(abstract_sentances, "data/abstract_sentances.rds")
 abstract_sentances %$%
     sentiment_by(ab_split) -> abstract_sentances_sentiment
 bind_cols(abstract_sentances, abstract_sentances_sentiment) -> ab_sent_senti
+ab_sent_senti %>% 
+  group_by(DI, AB) %>% 
+  summarise(ab_word_count = sum(word_count), 
+            ab_sentance_count = n(), 
+            ab_sentiment_min = round(min(ave_sentiment),4), 
+            ab_sentiment_max = round(max(ave_sentiment),4), 
+            ab_sentiment_med = round(median(ave_sentiment),3),
+            ab_sentiment_sd = round(sd(ave_sentiment),3)) -> ab_sent_senti
 saveRDS(ab_sent_senti, "data/ab_sent_senti.rds")
 
-rm("abstract_sentances")
-rm("abstract_sentances_sentiment")
-rm("ab_sent_senti")
-
 # Titles
-alt_all[1:6, ] %>%
-    get_sentences() %$%
-    sentiment_by(TI, list(AU, PY, DI)) -> title_sent
-uncombine(title_sent)
+#recommended process flow, but uncombine adds duplicate rows dont use.
+#alt_all[1:6, ] %>%
+#    get_sentences() %$%
+#    sentiment_by(TI, list(AU, PY, DI)) -> title_sent
+#uncombine(title_sent)
 
 alt_all %>% 
   filter(!is.na(TI), !is.na(DI)) %>% 
@@ -332,33 +337,37 @@ title_sentances %$%
     sentiment_by(title_split) -> title_sentances_sentiment
 
 bind_cols(title_sentances, title_sentances_sentiment) -> title_sent_senti
+title_sent_senti %>% 
+  group_by(DI, TI) %>% 
+  summarise(ti_word_count = sum(word_count), 
+            ti_sentance_count = n(), 
+            ti_sentiment_min = round(min(ave_sentiment),4), 
+            ti_sentiment_max = round(max(ave_sentiment),4), 
+            ti_sentiment_med = round(median(ave_sentiment),3),
+            ti_sentiment_sd = round(sd(ave_sentiment),3)) -> ti_sent_senti
 saveRDS(title_sent_senti, "data/title_sent_senti.rds")
 
-```
-
-Take a look at sentiment stuff
-```{r join-abstract-sentiment, eval=FALSE}
-# summarise sentiment by abstract
-ab_sent_senti <- readRDS("data/ab_sent_senti.rds")
-ab_sent_senti %>% 
-  group_by(DI, AB) %>% 
-  summarise(ab_word_count = sum(word_count), 
-            ab_sentance_count = n(), 
-            sentiment_min = round(min(ave_sentiment),4), 
-            sentiment_max = round(max(ave_sentiment),4), 
-            sentiment_med = round(median(ave_sentiment),3),
-            sentiment_sd = round(sd(ave_sentiment),3)) -> ab_sent_senti
-# add sentiment to abstracts
+# join sentiment to articles
 alt_all %>% 
-  left_join(ab_sent_senti) -> all_alti_senti
+  left_join(ab_sent_senti) %>% 
+  left_join(ti_sent_senti) -> all_alti_senti
 
+# Export for future use
 saveRDS(all_alti_senti, "data/all_alti_senti.RDS")
 write.csv(all_alti_senti, "data/all_alti_senti.csv")
-#rm(ab_sent_senti)
-#rm(alt_all)
+rm("abstract_sentances")
+rm("abstract_sentances_sentiment")
+rm("ab_sent_senti")
+rm("title_sentances")
+rm("title_sentances_sentiment")
+rm(ti_sent_senti)
+rm(alt_all)
+rm(alt_na)
+
 ```
 
-Summaries of sentiment
+
+Summaries of sentiment.
 ```{r abstract-sentiment-summary}
 # check for differences in counts of journal names. Same journal changes name etc?
 # Need to standardize journal names in WOS search results.
@@ -381,10 +390,6 @@ all_alti_senti %>%
   filter(!is.na(AB), !is.na(DI), PY %in% study_years) %>% pull(DI) %>% 
   unique() %>% length() -> article_count_doi#14330
 
-#alt_all %>% 
-#  filter(!is.na(AB), !is.na(DI), PY %in% study_years) %>% pull(DI) %>% 
-#  unique() %>% length() #14330
-
 all_alti_senti %>%
   filter(!is.na(AB), !is.na(DI), !is.na(altmetric),PY %in% study_years) %>% 
   pull(DI) %>% 
@@ -395,31 +400,71 @@ all_alti_senti %>%
   pull(DI) %>% 
   unique() %>% length() # 10395
 ```
+Correlation.
+```{r sentiment-correlation}
+df1a1 <- data.frame(ab_sentiment_med = seq(-2,2), ti_sentiment_med = seq(-2,2))
 
-Plot to see.
-```{r plot-sentiment-year, fig.height=5, fig.width=4}
 all_alti_senti %>% 
   filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years) %>%
-  ggplot(aes(x=factor(PY), y=sentiment_med)) + 
+  ggplot(aes(x=ab_sentiment_med, y=ti_sentiment_med)) +
+  geom_point() + 
+  geom_line(data= df1a1, aes(x=ab_sentiment_med, y=ti_sentiment_med)) +
+  stat_smooth(method="lm", linetype="dashed") + 
+  coord_fixed(xlim=c(-1,1), ylim=c(-1.6, 1.4)) +
+  labs(x="Abstract sentiment", y="Title sentiment")
+
+```
+
+
+Plot to see/explore. Temporal trrends in abstract and title sentiment.
+```{r plot-sentiment-year, fig.height=5, fig.width=7}
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years) %>% 
+    select(PY, altmetric, TC, ab_sentiment_med, ti_sentiment_med) %>% 
+  mutate(year = factor(PY)) %>% 
+  pivot_longer(cols = c(ab_sentiment_med, ti_sentiment_med)) %>% 
+  mutate(name = if_else(name=="ab_sentiment_med", "abstract sentiment", 
+                        "title sentiment")) %>%
+  ggplot(aes(x=factor(PY), y=value)) + 
   geom_point() + 
   geom_violin(draw_quantiles = 0.5) + 
   coord_flip() + 
+  facet_wrap(~name) +
   labs(x="year", y="sentiment")
 ```
 
-Relationship between article impact and sentiment.
+Relationship between article impact and Abstract sentiment.
 
 ```{r plot-article-impact-sentiment, fig.height=6, fig.width=5}
 all_alti_senti %>% 
   filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years) %>% 
-  select(PY, altmetric, TC, sentiment_med) %>% 
+  select(PY, altmetric, TC, ab_sentiment_med) %>% 
   mutate(year = factor(PY)) %>% 
   pivot_longer(cols = c(altmetric, TC)) %>% 
   mutate(name = if_else(name=="TC", "times cited", name)) %>%
-  ggplot(aes(x=value, y = sentiment_med)) + 
+  ggplot(aes(x=value, y = ab_sentiment_med)) + 
   geom_point() + 
   geom_smooth(method = "gam")+
   facet_grid(year~name, scales = "free_x") + 
   labs(x="article impact", y="Abstract sentiment")
 ```
 
+
+Relationship between article impact and title sentiment.
+
+```{r plot-title-impact-sentiment, fig.height=6, fig.width=5}
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years) %>% 
+  select(PY, altmetric, TC, ti_sentiment_med) %>% 
+  mutate(year = factor(PY)) %>% 
+  pivot_longer(cols = c(altmetric, TC)) %>% 
+  mutate(name = if_else(name=="TC", "times cited", name)) %>%
+  ggplot(aes(x=value, y = ti_sentiment_med)) + 
+  geom_point() + 
+  geom_smooth(method = "gam")+
+  facet_grid(year~name, scales = "free_x") + 
+  labs(x="article impact", y="title sentiment")
+```
+
+Trim extreme values? Do article impact indicators and sentiment values have 
+extreme values?
