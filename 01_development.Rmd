@@ -466,5 +466,47 @@ all_alti_senti %>%
   labs(x="article impact", y="title sentiment")
 ```
 
-Trim extreme values? Do article impact indicators and sentiment values have 
+Trim extreme values (Zuur 2010  https://doi.org/10.1111/j.2041-210X.2009.00001.x)? Do article impact indicators and sentiment values have 
 extreme values?
+
+```{r cleveland-plot-citation, fig.width=8, fig.height=12}
+
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years) %>% 
+  arrange(TC) %>% 
+  mutate(cite_order = rank(TC)) %>% 
+  ggplot(aes(x=altmetric, y=cite_order)) + 
+  geom_point(aes(col=ti_sentiment_med)) + 
+  scale_colour_gradient2("title\nsentiment", 
+                         low = "red", mid = "white", high = "green") +
+  facet_wrap(~PY, scales = "free", ncol = 1) + 
+  labs(title = "(A)", y="rank of times cited") -> fig_citation
+
+
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years) %>% 
+  arrange(TC) %>% 
+  mutate(ti_order = rank(ti_sentiment_med)) %>% 
+  ggplot(aes(x=ab_sentiment_med, y=ti_order)) + 
+  geom_point(aes(colour=TC)) + 
+  scale_color_viridis_c("times\ncited", trans = "log10") +
+  facet_wrap(~PY, scales = "free", ncol = 1) + 
+  labs(title = "(B)", x="abstract sentiment", 
+       y="rank title sentiment") -> fig_sent_cite
+
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years) %>% 
+  arrange(altmetric) %>% 
+  mutate(ti_order = rank(ti_sentiment_med)) %>% 
+  ggplot(aes(x=ab_sentiment_med, y=ti_order)) + 
+  geom_point(aes(colour=altmetric)) + 
+  scale_color_viridis_c("altmetric", trans = "log10") +
+  facet_wrap(~PY, scales = "free", ncol = 1) + 
+  labs(title = "(C)", x="abstract sentiment", 
+       y="rank title sentiment") -> fig_sent_alt
+
+
+gridExtra::grid.arrange(fig_citation, fig_sent_cite, fig_sent_alt, nrow=1)
+
+```
+
