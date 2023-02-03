@@ -148,8 +148,7 @@ journals_11a21_sum %>%
   labs(x="year", 
        y="impact indicator value")
 ```
-
-## Literature search results
+## Literature search checking
 
 Load bibliometric packages.
 ```{r load-packages-bibliometrics, message=FALSE, warning=FALSE}
@@ -162,7 +161,7 @@ library(metagear)
 
 
 Load bibliographic data from WOS core collection.
-```{r load-search, message=FALSE, warning=FALSE, eval=FALSE}
+```{r load-search, eval=FALSE}
 # 1) helper functions
 # file names
 source("R/get_files.R")
@@ -182,6 +181,43 @@ rm("lwos")
 rm("wosDN")
 
 ```
+
+
+### Screening
+
+Screening showed that 24% (48/200) of articles did not meet inclusion criteria (not vertebrates e.g. MAXENT, plants/invertebrates, metaanalysis, review, laboratory).
+Screening 100 takes approximately 25 minutes. Screening 16000 would take approximately 67 
+hours.
+```{r screen-search, eval=FALSE}
+wosDN <- readRDS("data/wosDN.rds")
+wosDN  %>% 
+  filter(!is.na(AB), !is.na(TI)) %>% 
+  slice_sample(n=200) -> screen_wos 
+screen_wos  %>% 
+  #to help use with metagear
+  mutate(STUDY_ID = row_number()) -> screen_meta    
+
+#Metagear. Prep to screen to retain only relevant studies
+screen_meta %>% mutate(AUTHORS = AU, YEAR = PY, TITLE = TI, 
+                    JOURNAL = SO, VOLUME = VL, LPAGES = PP, UPAGES = PP, 
+                    DOI = DI, ABSTRACT = AB) %>% 
+  select(STUDY_ID, AUTHORS, YEAR, TITLE, JOURNAL, VOLUME, LPAGES, 
+         UPAGES, DOI, ABSTRACT) -> screen_metagear
+
+screen_meta_ini <- effort_initialize(screen_metagear, study_ID = FALSE)
+theTeam <- c("Darren", "noone")
+theRefs_unscreened <- effort_distribute(screen_meta_ini, 
+                                        reviewers = theTeam, 
+                                        initialize = TRUE,
+                                        effort = c(50, 50), 
+                                        save_split = TRUE)
+
+abstract_screener("effort_noone1.csv", aReviewer = "noone")
+
+```
+
+
+## Literature search results
 
 Add altmetrics. To complete.
 ```{r add-altmetrics, eval=FALSE}
@@ -280,6 +316,12 @@ article_summary %>%
 # Sentiment analysis
 
 May need to also use custom classifier (e.g. Twitter optimism https://doi.org/10.1098/rsos.190473), machine learning available via [superml](https://github.com/saraswatmks/superml).
+
+Human annotated classification avalable for tweets: 
+https://doi.org/10.1371/journal.pone.0155036 (https://www.clarin.si/repository/xmlui/handle/11356/1054)
+
+Download twwets via https://cran.r-project.org/web/packages/rehydratoR/rehydratoR.pdf
+
 
 ```{r test-sentiment, eval=FALSE}
 library(sentimentr)
