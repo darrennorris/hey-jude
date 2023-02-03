@@ -320,9 +320,10 @@ May need to also use custom classifier (e.g. Twitter optimism https://doi.org/10
 Human annotated classification avalable for tweets: 
 https://doi.org/10.1371/journal.pone.0155036 (https://www.clarin.si/repository/xmlui/handle/11356/1054)
 
-Download twwets via https://cran.r-project.org/web/packages/rehydratoR/rehydratoR.pdf
+Download tweets via https://cran.r-project.org/web/packages/rehydratoR/rehydratoR.pdf
 
-
+API key: g6IwJTpYXHGRFj2M9rhfcljE2
+API Key Secret  cvSWp2ccBKFJFJ5K1lUUxnaoJgpupxP91HVtwrI3lojHWV9sXK
 ```{r test-sentiment, eval=FALSE}
 library(sentimentr)
 alt_all <- readRDS("data/alt_all.rds")
