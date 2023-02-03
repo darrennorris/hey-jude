@@ -469,44 +469,112 @@ all_alti_senti %>%
 Trim extreme values (Zuur 2010  https://doi.org/10.1111/j.2041-210X.2009.00001.x)? Do article impact indicators and sentiment values have 
 extreme values?
 
-```{r cleveland-plot-citation, fig.width=8, fig.height=12}
-
+Citations per year and title sentiment.
+```{r plot-citations-per-year, fig.width=7, fig.height=12}
+# citations per year
 all_alti_senti %>% 
-  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years) %>% 
-  arrange(TC) %>% 
-  mutate(cite_order = rank(TC)) %>% 
-  ggplot(aes(x=altmetric, y=cite_order)) + 
-  geom_point(aes(col=ti_sentiment_med)) + 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years, 
+         !DI=="10.1111/j.1472-4642.2010.00725.x") %>% 
+  mutate(cite_per_year = TC/(2022 - PY)) %>%
+  arrange(cite_per_year) %>% 
+  mutate(cite_order = row_number()) %>% 
+  ggplot(aes(x=cite_per_year, y=cite_order)) + 
+  geom_jitter(width=3, aes(col=ti_sentiment_med), alpha=0.3, size=2) + 
   scale_colour_gradient2("title\nsentiment", 
-                         low = "red", mid = "white", high = "green") +
+                         low = "red", mid = "grey80", high = "green") +
+  facet_wrap(~PY, scales = "free", ncol = 2) + 
+  labs(title = "(A)", y="order of times cited per year", 
+       x = "times cited per year") + 
+  theme_bw()
+```
+
+Citations per year and abstract sentiment.
+```{r plot-citations-per-year-abstract, fig.width=7, fig.height=12}
+# citations per year
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years, 
+         !DI=="10.1111/j.1472-4642.2010.00725.x") %>% 
+  mutate(cite_per_year = TC/(2022 - PY)) %>%
+  arrange(cite_per_year) %>% 
+  mutate(cite_order = row_number()) %>% 
+  ggplot(aes(x=cite_per_year, y=cite_order)) + 
+  geom_jitter(width=3, aes(col=ab_sentiment_med), alpha=0.3, size=2) + 
+  scale_colour_gradient2("abstract\nsentiment", 
+                         low = "red", mid = "grey80", high = "green") +
+  facet_wrap(~PY, scales = "free", ncol = 2) + 
+  labs(title = "(A)", y="order of times cited per year", 
+       x = "times cited per year") + 
+  theme_bw()
+```
+
+
+Explore data with Cleveland plots.
+
+
+```{r cleveland-plot-citation, fig.width=8, fig.height=12}
+# Okabe-Ito colour blind safe
+okabe <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years, 
+         !DI=="10.1111/j.1472-4642.2010.00725.x") %>% 
+  mutate(cite_per_year = TC/(2022 - PY)) %>% 
+#  pull(cite_per_year) %>% summary() 
+#   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#  0.000   1.500   3.000   4.351   5.444 158.000 
+  arrange(cite_per_year) %>%
+  mutate(cite_rank = rank(cite_per_year), 
+         cite_order = row_number(),
+         flag_sentiment = case_when(ab_sentiment_min<0 & ab_sentiment_med<0 ~ "negative", 
+                                    ab_sentiment_min>0 & ab_sentiment_med>0 ~ "positive", 
+                                    TRUE ~"neutral") 
+         ) %>% 
+  ggplot(aes(x=altmetric, y=cite_per_year)) + 
+  geom_jitter(aes(colour=flag_sentiment), height=1, alpha=0.4) +
+  stat_smooth(aes(colour=flag_sentiment), method = "gam", se=FALSE) +
+  scale_colour_manual("abstract\nsentiment", 
+                      values = c("#E69F00", "grey70", "#009E73")) + 
   facet_wrap(~PY, scales = "free", ncol = 1) + 
-  labs(title = "(A)", y="rank of times cited") -> fig_citation
+  labs(title = "(A)", y="times cited per year", 
+       x = "altimetric") + 
+  theme_bw() + theme(legend.position="top") + 
+  guides(color = guide_legend(nrow = 2)) -> fig_citation
 
 
 all_alti_senti %>% 
-  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years) %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years, 
+         !DI=="10.1111/j.1472-4642.2010.00725.x") %>% 
   arrange(TC) %>% 
   mutate(ti_order = rank(ti_sentiment_med)) %>% 
   ggplot(aes(x=ab_sentiment_med, y=ti_order)) + 
   geom_point(aes(colour=TC)) + 
-  scale_color_viridis_c("times\ncited", trans = "log10") +
+  scale_color_viridis_c("times\ncited", trans = "log1p") +
   facet_wrap(~PY, scales = "free", ncol = 1) + 
   labs(title = "(B)", x="abstract sentiment", 
-       y="rank title sentiment") -> fig_sent_cite
+       y="rank title sentiment") + theme(legend.position="top") -> fig_sent_cite
 
 all_alti_senti %>% 
-  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years) %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years, 
+         !DI=="10.1111/j.1472-4642.2010.00725.x") %>% 
   arrange(altmetric) %>% 
   mutate(ti_order = rank(ti_sentiment_med)) %>% 
   ggplot(aes(x=ab_sentiment_med, y=ti_order)) + 
   geom_point(aes(colour=altmetric)) + 
-  scale_color_viridis_c("altmetric", trans = "log10") +
+  scale_color_viridis_c("altmetric", trans = "log1p") +
   facet_wrap(~PY, scales = "free", ncol = 1) + 
   labs(title = "(C)", x="abstract sentiment", 
-       y="rank title sentiment") -> fig_sent_alt
+       y="rank title sentiment") + theme(legend.position="top") -> fig_sent_alt
 
 
 gridExtra::grid.arrange(fig_citation, fig_sent_cite, fig_sent_alt, nrow=1)
 
+```
+
+
+Tidy to keep workspace small.
+```{r tidy-workspace}
+rm(fig_citation)
+rm(fig_sent_alt)
+rm(fig_sent_cite)
 ```
 
