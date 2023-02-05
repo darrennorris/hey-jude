@@ -58,6 +58,7 @@ library(rAltmetric)
 library(metagear)
 # Sentiment
 library(sentimentr)
+library(SentimentAnalysis)
 ```
 
 ## Journal impact
@@ -427,7 +428,84 @@ sentiment_phrases %>%
 
 ```
 
-Text sentiment
+## Text sentiment
+
+Look at scores for simple phrases.
+```{r simple-sentiment}
+
+mysentences_pos <- c("Take a sad song and make it better.", 
+                     "I am very pleased with it so far."
+                 )
+# Annie Swafford examples
+ase <- c(
+    "I haven't been sad in a long time.",
+    "I am extremely happy today.",
+    "It's a good day.",
+    "But suddenly I'm only a little bit happy.",
+    "Then I'm not happy at all.",
+    "In fact, I am now the least happy person on the planet.",
+    "There is no happiness left in me.",
+    "Wait, it's returned!",
+    "I don't feel so bad after all!"
+)
+mysentiments <- c("positive", "positive", "neutral", "positive", "positive", "positive", 
+                  "negative", "negative", "negative", "neutral", "neutral")
+dftest <- data.frame(sentence = c(mysentences_pos, ase), sentiment = mysentiments)
+s_rinker <- sentiment_by(dftest$sentence, 
+                         polarity_dt = lexicon::hash_sentiment_jockers_rinker) %>% 
+  rename("ave_sent_rinker"="ave_sentiment")
+# Liu & HU (2004) 
+s_hu <- sentiment_by(dftest$sentence, 
+                     polarity_dt = lexicon::hash_sentiment_huliu) %>% 
+  rename("ave_sent_huliu"="ave_sentiment")
+  
+# GI = Dictionary with opinionated words from the Harvard-IV dictionary as used in the General Inquirer software
+# LM = Loughran-McDonald Financial dictionary (Loughran and McDonald 2011)
+# QDAP = dictionary from the package qdapDictionaries
+sa <- SentimentAnalysis::analyzeSentiment(dftest$sentence) 
+
+# Stanford coreNLP
+out1 <- sentiment_stanford(dftest$sentence) %>% 
+  rename("ave_sent_stanford"="sentiment")
+
+bind_cols(dftest, s_hu[, c('word_count', 'ave_sent_huliu')], 
+          s_rinker[, 'ave_sent_rinker'], 
+          out1[, 'ave_sent_stanford'],
+          sa %>% select(WordCount, SentimentGI, SentimentLM, SentimentQDAP) 
+) %>% 
+  select(sentence, sentiment, word_count, ave_sent_huliu, ave_sent_rinker, 
+         ave_sent_stanford, SentimentGI, SentimentLM, SentimentQDAP) %>% 
+  pivot_longer(cols=c(ave_sent_huliu, ave_sent_rinker, ave_sent_stanford, SentimentGI, SentimentLM, SentimentQDAP)) %>% 
+  ggplot(aes(x=factor(sentiment), y = value)) + 
+    geom_violin(aes(fill = factor(name)), draw_quantiles=0.5) + 
+  scale_fill_discrete("lexicon") + 
+  labs(x="human annotated sentiment", 
+       y="sentiment score")
+           
+  
+
+```
+Ensemble approach with three best dictionaries.
+
+```{r sentiment-ensemble}
+
+bind_cols(dftest, s_hu[, c('word_count', 'ave_sent_huliu')], 
+          s_rinker[, 'ave_sent_rinker'], 
+          out1[, 'ave_sent_stanford']) %>% 
+  select(sentence, sentiment, word_count, ave_sent_huliu, ave_sent_rinker, 
+         ave_sent_stanford) %>% 
+  pivot_longer(cols=c(ave_sent_huliu, ave_sent_rinker, ave_sent_stanford)) %>% 
+  group_by(sentiment, sentence) %>% summarise(med_sent = median(value)) %>%
+  ggplot(aes(x=factor(sentiment), y = med_sent)) + 
+    geom_violin(draw_quantiles = 0.5) + 
+  geom_jitter(width = 0.1, size = 2) +
+  #scale_fill_discrete("lexicon") + 
+  labs(x="human annotated sentiment", 
+       y="sentiment score")
+
+```
+
+
 ```{r text-sentiment, eval=FALSE}
 sentiment_phrases %>% 
   mutate(sent_01 = replace_emoji(sentence)) %>% 
