@@ -390,7 +390,7 @@ sentiment_labelled_sentences. Contains sentences labelled with positive or negat
 
 ```{r get-txt}
 # 2264 phrases with 100% agreement
-txt_01 <- "data/FinancialPhraseBank-v1.0/Sentences_AllAgree.txt"
+txt_01 <- "data/sentiment_FinancialPhraseBank-v1.0/Sentences_AllAgree.txt"
 Sentiment_finance <- readr::read_delim(txt_01, delim = "@", escape_double = FALSE, 
                                        col_names = c("sentence", "sentiment"), 
                                        trim_ws = TRUE) %>% mutate(source = "finance")
