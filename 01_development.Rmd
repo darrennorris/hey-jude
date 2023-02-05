@@ -41,12 +41,23 @@ knit_hooks$set(output = function(x, options) {
 # Load and prep data
 ## Packages
 ```{r load-packages, warning=FALSE, message=FALSE}
+# Data processing and presentation
 library(plyr) # plyr before tidyverse
 library(tidyverse)
 library(stringr)
+library(textclean)
 library(readxl)
 library(gridExtra)
 library(magrittr)
+# Tweets
+library(rtweet) 
+library(academictwitteR)
+# bibliometric
+library(bibliometrix)
+library(rAltmetric)
+library(metagear)
+# Sentiment
+library(sentimentr)
 ```
 
 ## Journal impact
@@ -149,16 +160,6 @@ journals_11a21_sum %>%
        y="impact indicator value")
 ```
 ## Literature search checking
-
-Load bibliometric packages.
-```{r load-packages-bibliometrics, message=FALSE, warning=FALSE}
-library(bibliometrix)
-library(rcrossref)
-library(rAltmetric)
-library(metagear)
-
-```
-
 
 Load bibliographic data from WOS core collection.
 ```{r load-search, eval=FALSE}
@@ -317,15 +318,172 @@ article_summary %>%
 
 May need to also use custom classifier (e.g. Twitter optimism https://doi.org/10.1098/rsos.190473), machine learning available via [superml](https://github.com/saraswatmks/superml).
 
-Human annotated classification avalable for tweets: 
+Human classified text to help calibrate sentiment scores.
+
+## Twitter
+Human classified tweets to help calibrate sentiment scores.
+Human annotated classification available for tweets? 
+http://dx.doi.org/10.1098/rsos.190473
 https://doi.org/10.1371/journal.pone.0155036 (https://www.clarin.si/repository/xmlui/handle/11356/1054)
 
-Download tweets via https://cran.r-project.org/web/packages/rehydratoR/rehydratoR.pdf
+Get tweets with associated human sentiment.
+Test and download Tweets.
+```{r twitter, eval=FALSE}
 
-API key: g6IwJTpYXHGRFj2M9rhfcljE2
-API Key Secret  cvSWp2ccBKFJFJ5K1lUUxnaoJgpupxP91HVtwrI3lojHWV9sXK
+#API key: g6IwJTpYXHGRFj2M9rhfcljE2
+#API Key Secret  cvSWp2ccBKFJFJ5K1lUUxnaoJgpupxP91HVtwrI3lojHWV9sXK
+#API Access Token 1393632534676787205-3rPq6YwjqA9LD2YYX36VMwKNCuh8Nz
+#API Access Token Secret: 0QUqf3168seUaPCr0i3OKUDtIrgwUXD1JrIqiDIZzj8ps
+
+# https://doi.org/10.1007/s13278-016-0327-z
+# https://zenodo.org/record/4255764#.Y96g7nbMLIU
+
+# Read tweet ids
+# from https://royalsocietypublishing.org/doi/suppl/10.1098/rsos.190473
+twitter_sentiment <- readxl::read_excel("data/human_twitter_sentiment.xlsx")
+twitter_sentiment %>% pull('TWEET_ID_TEXT') -> myids
+# Twitter airline sentiment (with tweet text)
+# https://www.kaggle.com/datasets/crowdflower/twitter-airline-sentiment 
+
+
+api_key <- "g6IwJTpYXHGRFj2M9rhfcljE2"
+api_secret_key <- "cvSWp2ccBKFJFJ5K1lUUxnaoJgpupxP91HVtwrI3lojHWV9sXK"
+access_Token <- "1393632534676787205-3rPq6YwjqA9LD2YYX36VMwKNCuh8Nz"
+access_TokenSecret <- "0QUqf3168seUaPCr0i3OKUDtIrgwUXD1JrIqiDIZzj8ps"
+mybearer <- "AAAAAAAAAAAAAAAAAAAAAGSAlgEAAAAAVf81AnZ7G4uIAa9QI%2FVnQtPn%2FXE%3DRMzghgq1vBEyGo2NXydxWdMleY3DmPBbyJwHMwbhtpf5VyY3wb"
+# below works when RStudio has administrator and bing is signed into twitter
+rtweet::auth_setup_default()
+tweets <- search_tweets("weather", n=2)
+ statuses <- c(
+    "567053242429734913",
+    "266031293945503744",
+    "440322224407314432", 
+    "14946300000000000"
+  )
+tw <- lookup_tweets(myids, retryonratelimit = TRUE)
+tw %>% left_join(twitter_sentiment, by=c("id_str"="TWEET_ID_TEXT")) %>%
+  group_by(SENTIMENT) %>% summarise(acount=length(unique(id_str)))
+# negative	13			
+# neutral	138			
+# positive	105	
+saveRDS(tw, "data/twitter_optimism.RDS")
+
+```
+
+sentiment_trainingandtestdata Data file format has 6 fields:
+0 - the polarity of the tweet (0 = negative, 2 = neutral, 4 = positive)
+1 - the id of the tweet (2087)
+2 - the date of the tweet (Sat May 16 23:58:44 UTC 2009)
+3 - the query (lyx). If there is no query, then this value is NO_QUERY.
+4 - the user that tweeted (robotickilldozr)
+5 - the text of the tweet (Lyx is cool) . Go et al. at 2009, the Sentiment140 Tweet data from 2009
+Twitter sentiment. To do .....
+```{r}
+
+```
+
+## Other sentiment datasets.
+
+FinancialPhraseBank-v1.0  This dataset contains the sentiments for financial news headlines from the perspective of a retail investor. Malo, P., Sinha, A., Takala, P., Korhonen, P. and Wallenius, J. (2013): “Good debt or bad debt: Detecting semantic orientations in economic texts.” Journal of the American Society for Information Science and Technology. 
+
+sentiment_labelled_sentences. Contains sentences labelled with positive or negative sentiment, extracted from reviews of products, movies, and restaurants. From Group to Individual Labels using Deep Features', Kotzias et. al,. KDD 2015
+
+```{r get-txt}
+# 2264 phrases with 100% agreement
+txt_01 <- "data/FinancialPhraseBank-v1.0/Sentences_AllAgree.txt"
+Sentiment_finance <- readr::read_delim(txt_01, delim = "@", escape_double = FALSE, 
+                                       col_names = c("sentence", "sentiment"), 
+                                       trim_ws = TRUE) %>% mutate(source = "finance")
+Sentiment_finance %>% 
+  group_by(sentiment) %>% summarise(acount = n())
+#negative	303			
+#neutral	1391			
+#positive	570	
+
+txt_02 <- "data/sentiment_labelled_sentences/amazon_cells_labelled.txt"
+txt_03 <- "data/sentiment_labelled_sentences/imdb_labelled.txt"
+txt_04 <- "data/sentiment_labelled_sentences/yelp_labelled.txt"
+sentiment_review <- bind_rows (read_delim(txt_02, delim = "\t", escape_double = FALSE, 
+                               col_names =c("sentence","sentiment"), trim_ws = TRUE) %>% 
+                                 mutate(source = "amazon"), 
+                               read_delim(txt_03, delim = "\t", escape_double = FALSE, 
+                               col_names =c("sentence","sentiment"), trim_ws = TRUE) %>% 
+                                 mutate(source = "imdb"), 
+                               read_delim(txt_04, delim = "\t", escape_double = FALSE, 
+                               col_names =c("sentence","sentiment"), trim_ws = TRUE) %>% 
+                                 mutate(source = "yelp") 
+)
+  
+# join
+bind_rows(Sentiment_finance, 
+          sentiment_review %>% 
+            mutate(sentiment = if_else(sentiment=="0", "negative", "positive"))) -> sentiment_phrases
+
+sentiment_phrases %>% 
+  group_by(sentiment) %>% summarise(acount=n())
+# negative	1395			
+# neutral	1391			
+# positive	1701
+
+```
+
+Text sentiment
+```{r text-sentiment, eval=FALSE}
+sentiment_phrases %>% 
+  mutate(sent_01 = replace_emoji(sentence)) %>% 
+  mutate(sent_02 = replace_html(sent_01)) %>%
+    dplyr::mutate(phrase_split = get_sentences(sent_02)) %>% 
+  unnest_longer(phrase_split) -> phrase_split
+
+phrase_sentances %$%
+    sentiment_by(phrase_split) -> phrase_sentances_sentiment
+
+sentiment_phrases %>% left_join(
+bind_cols(phrase_sentances %>% select(sentence, phrase_split), 
+          phrase_sentances_sentiment) %>% 
+  group_by(sentence) %>% 
+  summarise(rev_word_count = sum(word_count), 
+            rev_sentance_count = n(), 
+            rev_sentiment_min = round(min(ave_sentiment),4), 
+            rev_sentiment_max = round(max(ave_sentiment),4), 
+            rev_sentiment_med = round(median(ave_sentiment),3),
+            rev_sentiment_sd = round(sd(ave_sentiment),3)) 
+) -> sentiment_phrases_reviews
+
+saveRDS(sentiment_phrases_reviews, "data/sentiment_phrases_reviews.RDS")
+
+```
+
+Plot to check
+```{r plot-human, fig.cap="Sentiment scores of human annotated text . Values across four sources 2264 investor sentiments for financial news headlines (finance), and 2223 positive or negative sentiment, extracted from reviews of products (Amazon), films (IMDB), and restaurants (Yelp). "}
+
+
+sentiment_phrases_reviews <- readRDS("data/sentiment_phrases_reviews.RDS")
+# # 25th and 75th percentiles
+sentiment_phrases_reviews %>% 
+  filter(source=="finance", sentiment=="neutral") %>% 
+  pull(rev_sentiment_med) %>% Hmisc::smean.cl.boot(conf.int=.95) -> bootci
+lcl <- bootci[2]
+ucl <- bootci[3]
+
+#
+sentiment_phrases_reviews %>% 
+  ggplot(aes(x=sentiment, y = rev_sentiment_med)) +
+  #geom_point(aes(fill = factor(source))) + 
+  geom_violin(aes(fill = factor(source)), draw_quantiles=0.5) + 
+  #geom_hline(yintercept = lcl, linetype = "dashed") + 
+  #geom_hline(yintercept = ucl, linetype = "dashed") +
+  scale_fill_discrete("source") + 
+  labs(x="human annotated sentiment", 
+       y="sentiment score")
+
+```
+
+
+
+Abstract sentiment.
+
 ```{r test-sentiment, eval=FALSE}
-library(sentimentr)
 alt_all <- readRDS("data/alt_all.rds")
 
 # Test on an optimistic example
