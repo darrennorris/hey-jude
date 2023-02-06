@@ -59,12 +59,16 @@ library(metagear)
 # Sentiment
 library(sentimentr)
 library(SentimentAnalysis)
+library(syuzhet)
+library(coreNLPsetup)
+library(stansent)
+
 ```
 
 ## Journal impact
 
 [Scopus CiteScore](https://www.elsevier.com/solutions/scopus/how-scopus-works/metrics/citescore) and [JCR Journal Impact Factor ("JIF")](https://clarivate.com/webofsciencegroup/solutions/journal-citation-reports/), downloaded on 24 and 23 January 2023 respectively. 
-Using 11 years (2011 to 2021), as 2011 was first year for CiteScore, the year when Altmetrics was founded and also follows the definition of conservation threats and actions published in 2008 (Salafsky et. al., 2008 A Standard Lexicon for Biodiversity Conservation: Unified Classifications of Threats and Actions https://doi.org/10.1111/j.1523-1739.2008.00937.x). 
+Using 11 years (2011 to 2021), as 2011 was first year for CiteScore, the year when Altmetrics was founded and also follows the definition of conservation threats and actions published in 2008 (Salafsky et. al., 2008 A Standard Lexicon for Biodiversity Conservation: Unified Classifications of Threats and Actions https://doi.org/10.1111/j.1523-1739.2008.00937.x) and Balmford 2009 for threats 10.1111/j.1523-1739.2009.01196.x  . 
 The companies classify journals differently and the folder [data](https://github.com/darrennorris/hey-jude/tree/main/data) has JCR impact of  Biodiversity Conservation category journals (JIF https://github.com/darrennorris/hey-jude/tree/main/data/clarivate_JCR) and matching CiteScore (CiteScore: https://github.com/darrennorris/hey-jude/tree/main/data/scopus_citescore). To match, CiteScore comes from a combination of journals in "Nature and Landscape Conservation", "Ecology, Evolution, Behavior and Systematics" and  the following 12:
 African Natural History, Proceedings Of The Linnean Society Of New South Wales, Caribbean Journal Of Science, Urban Ecosystems, Natural History, Revista Chilena De Historia Natural, Polar Biology, Pachyderm, Global Change Biology, Bulletin Of The American Museum Of Natural History, American Museum Novitates, Journal Of Applied Ecology. 
 
@@ -431,7 +435,7 @@ sentiment_phrases %>%
 ## Text sentiment
 
 Look at scores for simple phrases.
-```{r simple-sentiment}
+```{r simple-sentiment, fig.width=7, fig.height=8}
 
 mysentences_pos <- c("Take a sad song and make it better.", 
                      "I am very pleased with it so far."
@@ -452,13 +456,20 @@ mysentiments <- c("positive", "positive", "neutral", "positive", "positive", "po
                   "negative", "negative", "negative", "neutral", "neutral")
 dftest <- data.frame(sentence = c(mysentences_pos, ase), sentiment = mysentiments)
 s_rinker <- sentiment_by(dftest$sentence, 
-                         polarity_dt = lexicon::hash_sentiment_jockers_rinker) %>% 
+                         polarity_dt = lexicon::hash_sentiment_jockers_rinker, 
+                         question.weight = 0) %>% 
   rename("ave_sent_rinker"="ave_sentiment")
 # Liu & HU (2004) 
 s_hu <- sentiment_by(dftest$sentence, 
-                     polarity_dt = lexicon::hash_sentiment_huliu) %>% 
+                     polarity_dt = lexicon::hash_sentiment_huliu, 
+                     question.weight = 0) %>% 
   rename("ave_sent_huliu"="ave_sentiment")
-  
+s_jockers <- sentiment_by(dftest$sentence, 
+                     polarity_dt = lexicon::hash_sentiment_jockers, 
+                     question.weight = 0) %>% 
+  rename("ave_sent_jockers"="ave_sentiment")
+
+# SentimentAnalysis  
 # GI = Dictionary with opinionated words from the Harvard-IV dictionary as used in the General Inquirer software
 # LM = Loughran-McDonald Financial dictionary (Loughran and McDonald 2011)
 # QDAP = dictionary from the package qdapDictionaries
@@ -467,38 +478,57 @@ sa <- SentimentAnalysis::analyzeSentiment(dftest$sentence)
 # Stanford coreNLP
 out1 <- sentiment_stanford(dftest$sentence) %>% 
   rename("ave_sent_stanford"="sentiment")
-
+#syuzhet
+sent_syuzhet <- get_sentiment(dftest$sentence, method="syuzhet")
+data.frame(score = sent_syuzhet, sent=dftest$sentiment)
+dfsyuzhet <- data.frame(syuzhet_syuzhet=sent_syuzhet)
+class(dfsyuzhet[, 'syuzhet_syuzhet'])
+dfsyuzhet %>% select(syuzhet_syuzhet)
+#
 bind_cols(dftest, s_hu[, c('word_count', 'ave_sent_huliu')], 
-          s_rinker[, 'ave_sent_rinker'], 
-          out1[, 'ave_sent_stanford'],
+          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
+          out1[, 'ave_sent_stanford'], dfsyuzhet %>% select(syuzhet_syuzhet),
           sa %>% select(WordCount, SentimentGI, SentimentLM, SentimentQDAP) 
 ) %>% 
-  select(sentence, sentiment, word_count, ave_sent_huliu, ave_sent_rinker, 
-         ave_sent_stanford, SentimentGI, SentimentLM, SentimentQDAP) %>% 
-  pivot_longer(cols=c(ave_sent_huliu, ave_sent_rinker, ave_sent_stanford, SentimentGI, SentimentLM, SentimentQDAP)) %>% 
+  mutate(aid = paste("sent_", 1:11, sep="")) %>%
+  select(aid, sentence, sentiment, word_count, ave_sent_huliu, ave_sent_rinker, ave_sent_jockers,
+         syuzhet_syuzhet, ave_sent_stanford, SentimentGI, SentimentLM, SentimentQDAP) %>% 
+  pivot_longer(cols=c(ave_sent_huliu, ave_sent_rinker, ave_sent_jockers, ave_sent_stanford, syuzhet_syuzhet, SentimentGI, SentimentLM, SentimentQDAP)) %>% 
   ggplot(aes(x=factor(sentiment), y = value)) + 
     geom_violin(aes(fill = factor(name)), draw_quantiles=0.5) + 
+  geom_hline(yintercept = 0) +
   scale_fill_discrete("lexicon") + 
   labs(x="human annotated sentiment", 
-       y="sentiment score")
+       y="sentiment score") + 
+  coord_flip()
            
-  
-
 ```
-Ensemble approach with three best dictionaries.
+Ensemble approach with four "best" dictionaries.
 
 ```{r sentiment-ensemble}
 
 bind_cols(dftest, s_hu[, c('word_count', 'ave_sent_huliu')], 
-          s_rinker[, 'ave_sent_rinker'], 
+          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
           out1[, 'ave_sent_stanford']) %>% 
-  select(sentence, sentiment, word_count, ave_sent_huliu, ave_sent_rinker, 
+  mutate(aid = paste("sent_", 
+                     c("01", "02", "03", "04", "05", "06", 
+                       "07", "08", "09", "10", "11"), sep="")) %>%
+  select(aid, sentence, sentiment, word_count, 
+         ave_sent_huliu, 
+         ave_sent_rinker, 
+         ave_sent_jockers,
          ave_sent_stanford) %>% 
-  pivot_longer(cols=c(ave_sent_huliu, ave_sent_rinker, ave_sent_stanford)) %>% 
-  group_by(sentiment, sentence) %>% summarise(med_sent = median(value)) %>%
-  ggplot(aes(x=factor(sentiment), y = med_sent)) + 
-    geom_violin(draw_quantiles = 0.5) + 
-  geom_jitter(width = 0.1, size = 2) +
+  pivot_longer(cols=c(ave_sent_rinker, ave_sent_huliu, ave_sent_jockers, ave_sent_stanford)) %>% 
+  #group_by(aid, sentiment, sentence) %>% summarise(med_sent = median(value), 
+   #                                           min_sent = min(value), 
+   #                                           max_sent = max(value)) %>%
+  ggplot(aes(x=factor(sentiment), y = value)) + 
+    geom_violin(aes(fill = factor(name)), draw_quantiles = 0.5) + 
+  #geom_point(size = 2, aes(col = factor(aid), shape=factor(name)), 
+  #           position=position_dodge(width=0.3)) +
+  #geom_errorbar(aes(ymin = min_sent, ymax = max_sent, 
+  #                  col = factor(aid)), 
+   #             position=position_dodge(width=0.2))
   #scale_fill_discrete("lexicon") + 
   labs(x="human annotated sentiment", 
        y="sentiment score")
