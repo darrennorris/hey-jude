@@ -164,7 +164,10 @@ journals_11a21_sum %>%
   labs(x="year", 
        y="impact indicator value")
 ```
-## Literature search checking
+
+## Article impact
+
+### Literature search checking
 
 Load bibliographic data from WOS core collection.
 ```{r load-search, eval=FALSE}
@@ -223,7 +226,7 @@ abstract_screener("effort_noone1.csv", aReviewer = "noone")
 ```
 
 
-## Literature search results
+### Altimetric
 
 Add altmetrics. To complete.
 ```{r add-altmetrics, eval=FALSE}
@@ -282,6 +285,7 @@ altna_all %>%
 saveRDS(altna_all, "data/altna_all.rds")
 ```
 
+# Literature search results
 
 Calculate summaries of articles.
 ```{r article-summaries}
@@ -437,11 +441,11 @@ sentiment_phrases %>%
 Look at scores for simple phrases.
 ```{r simple-sentiment, fig.width=7, fig.height=8}
 
-mysentences_pos <- c("Take a sad song and make it better.", 
-                     "I am very pleased with it so far."
-                 )
-# Annie Swafford examples
-ase <- c(
+# add to Annie Swafford examples
+ase <- c( 
+  "What shall I do today?",
+  "Take a sad song and make it better.", 
+    "I am very pleased with it so far.",
     "I haven't been sad in a long time.",
     "I am extremely happy today.",
     "It's a good day.",
@@ -450,11 +454,16 @@ ase <- c(
     "In fact, I am now the least happy person on the planet.",
     "There is no happiness left in me.",
     "Wait, it's returned!",
-    "I don't feel so bad after all!"
+    "I don't feel so bad after all!",
+  "I think to myself what a wonderful world."
 )
-mysentiments <- c("positive", "positive", "neutral", "positive", "positive", "positive", 
-                  "negative", "negative", "negative", "neutral", "neutral")
-dftest <- data.frame(sentence = c(mysentences_pos, ase), sentiment = mysentiments)
+mysentiments <- c("neutral","positive", "positive", "neutral", "positive", "positive", "positive", "negative", "negative", "negative", "neutral", "neutral", "positive")
+myscores <- c(0, 0.75, 1, 0, 1, 1, 0.75, 0, -1, -1, 0, 0, 1) 
+myaid = paste("sent_", 
+                     c("01", "02", "03", "04", "05", "06", 
+                       "07", "08", "09", "10", "11", "12", "13"), sep="")
+dftest <- data.frame(sentence = ase, sentiment = mysentiments, score = myscores, 
+                     aid = myaid, sent_order = 1:13)
 s_rinker <- sentiment_by(dftest$sentence, 
                          polarity_dt = lexicon::hash_sentiment_jockers_rinker, 
                          question.weight = 0) %>% 
@@ -490,7 +499,6 @@ bind_cols(dftest, s_hu[, c('word_count', 'ave_sent_huliu')],
           out1[, 'ave_sent_stanford'], dfsyuzhet %>% select(syuzhet_syuzhet),
           sa %>% select(WordCount, SentimentGI, SentimentLM, SentimentQDAP) 
 ) %>% 
-  mutate(aid = paste("sent_", 1:11, sep="")) %>%
   select(aid, sentence, sentiment, word_count, ave_sent_huliu, ave_sent_rinker, ave_sent_jockers,
          syuzhet_syuzhet, ave_sent_stanford, SentimentGI, SentimentLM, SentimentQDAP) %>% 
   pivot_longer(cols=c(ave_sent_huliu, ave_sent_rinker, ave_sent_jockers, ave_sent_stanford, syuzhet_syuzhet, SentimentGI, SentimentLM, SentimentQDAP)) %>% 
@@ -509,10 +517,7 @@ Ensemble approach with four "best" dictionaries.
 
 bind_cols(dftest, s_hu[, c('word_count', 'ave_sent_huliu')], 
           s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
-          out1[, 'ave_sent_stanford']) %>% 
-  mutate(aid = paste("sent_", 
-                     c("01", "02", "03", "04", "05", "06", 
-                       "07", "08", "09", "10", "11"), sep="")) %>%
+          out1[, 'ave_sent_stanford']) %>%
   select(aid, sentence, sentiment, word_count, 
          ave_sent_huliu, 
          ave_sent_rinker, 
@@ -534,6 +539,29 @@ bind_cols(dftest, s_hu[, c('word_count', 'ave_sent_huliu')],
        y="sentiment score")
 
 ```
+
+Use 4 best to model sentiment directions. Where confidence interval overlaps zero 
+then is neutral.
+```{r sentiment-direction-ensemble, fig.width=7, fig.height=4}
+bind_cols(dftest, s_hu[, c('word_count', 'ave_sent_huliu')], 
+          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
+          out1[, 'ave_sent_stanford']) %>% 
+  select(aid, sent_order, sentence, score, sentiment, word_count, 
+         ave_sent_huliu, 
+         ave_sent_rinker, 
+         ave_sent_jockers,
+         ave_sent_stanford) %>% 
+  pivot_longer(cols=c(ave_sent_rinker, ave_sent_huliu, ave_sent_jockers, ave_sent_stanford)) %>% 
+  ggplot(aes(x = sent_order, y = value)) + 
+  geom_hline(yintercept=0) +
+  geom_jitter(aes(colour = name)) + 
+  geom_line(aes(color = as.factor(name))) +
+  stat_smooth(method = "gam",formula = y ~ s(x, k = 13),
+              linetype="dashed") + 
+  labs(x="sentence order", 
+       y="sentiment score")
+```
+
 
 
 ```{r text-sentiment, eval=FALSE}
