@@ -1,0 +1,66 @@
+---
+title: "01_lexicon"
+author: "Darren Norris"
+date: "`r Sys.Date()`"
+output:
+  bookdown::html_document2:
+    toc: yes
+    toc_float: yes
+    toc_depth: 3
+    fig_caption: yes
+  bookdown::pdf_document2:
+    toc: yes
+    toc_depth: 3
+    number_sections: yes
+    extra_dependencies: flafter
+    highlight: tango
+    includes:
+      in_header: preamble.txe
+always_allow_html: yes
+urlcolor: blue
+toc-title: Contents
+header-includes:
+  - \counterwithin{figure}{section}
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(
+  echo = TRUE, collapse = TRUE,
+  comment = "#>" 
+  )
+def_hook <- knit_hooks$get("output")
+knit_hooks$set(output = function(x, options) {
+  out <- def_hook(x, options)
+  return(paste("\\begin{framed}\\begin{verbatim}", x, "\\end{verbatim}\\end{framed}", collapse = "\n"))
+})
+```
+
+Develop from sentimentr.
+## Packages
+```{r load-packages, warning=FALSE, message=FALSE}
+# Data processing and presentation
+library(plyr) # plyr before tidyverse
+library(tidyverse)
+library(stringr)
+library(textclean)
+library(readxl)
+library(gridExtra)
+library(magrittr)
+# Sentiment
+library(sentimentr)
+library(SentimentAnalysis)
+library(syuzhet)
+library(coreNLPsetup)
+library(stansent)
+
+```
+
+Update existing example. Remove common names for natural resources and living beings and change scores to represent general usage in conservation science. 
+Do not exclude "conservation", rather reduce score.
+```{r}
+?lexicon::hash_sentiment_jockers_rinker
+
+jr <- lexicon::hash_sentiment_jockers_rinker
+write.csv(jr, "data/jr.csv")
+```

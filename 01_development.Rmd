@@ -436,132 +436,6 @@ sentiment_phrases %>%
 
 ```
 
-## Text sentiment
-
-Look at scores for simple phrases.
-```{r simple-sentiment, fig.width=7, fig.height=8}
-
-# add to Annie Swafford examples
-ase <- c( 
-  "What shall I do today?",
-  "Take a sad song and make it better.", 
-    "I am very pleased with it so far.",
-    "I haven't been sad in a long time.",
-    "I am extremely happy today.",
-    "It's a good day.",
-    "But suddenly I'm only a little bit happy.",
-    "Then I'm not happy at all.",
-    "In fact, I am now the least happy person on the planet.",
-    "There is no happiness left in me.",
-    "Wait, it's returned!",
-    "I don't feel so bad after all!",
-  "I think to myself what a wonderful world."
-)
-mysentiments <- c("neutral","positive", "positive", "neutral", "positive", "positive", "positive", "negative", "negative", "negative", "neutral", "neutral", "positive")
-myscores <- c(0, 0.75, 1, 0, 1, 1, 0.75, 0, -1, -1, 0, 0, 1) 
-myaid = paste("sent_", 
-                     c("01", "02", "03", "04", "05", "06", 
-                       "07", "08", "09", "10", "11", "12", "13"), sep="")
-dftest <- data.frame(sentence = ase, sentiment = mysentiments, score = myscores, 
-                     aid = myaid, sent_order = 1:13)
-s_rinker <- sentiment_by(dftest$sentence, 
-                         polarity_dt = lexicon::hash_sentiment_jockers_rinker, 
-                         question.weight = 0) %>% 
-  rename("ave_sent_rinker"="ave_sentiment")
-# Liu & HU (2004) 
-s_hu <- sentiment_by(dftest$sentence, 
-                     polarity_dt = lexicon::hash_sentiment_huliu, 
-                     question.weight = 0) %>% 
-  rename("ave_sent_huliu"="ave_sentiment")
-s_jockers <- sentiment_by(dftest$sentence, 
-                     polarity_dt = lexicon::hash_sentiment_jockers, 
-                     question.weight = 0) %>% 
-  rename("ave_sent_jockers"="ave_sentiment")
-
-# SentimentAnalysis  
-# GI = Dictionary with opinionated words from the Harvard-IV dictionary as used in the General Inquirer software
-# LM = Loughran-McDonald Financial dictionary (Loughran and McDonald 2011)
-# QDAP = dictionary from the package qdapDictionaries
-sa <- SentimentAnalysis::analyzeSentiment(dftest$sentence) 
-
-# Stanford coreNLP
-out1 <- sentiment_stanford(dftest$sentence) %>% 
-  rename("ave_sent_stanford"="sentiment")
-#syuzhet
-sent_syuzhet <- get_sentiment(dftest$sentence, method="syuzhet")
-data.frame(score = sent_syuzhet, sent=dftest$sentiment)
-dfsyuzhet <- data.frame(syuzhet_syuzhet=sent_syuzhet)
-class(dfsyuzhet[, 'syuzhet_syuzhet'])
-dfsyuzhet %>% select(syuzhet_syuzhet)
-#
-bind_cols(dftest, s_hu[, c('word_count', 'ave_sent_huliu')], 
-          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
-          out1[, 'ave_sent_stanford'], dfsyuzhet %>% select(syuzhet_syuzhet),
-          sa %>% select(WordCount, SentimentGI, SentimentLM, SentimentQDAP) 
-) %>% 
-  select(aid, sentence, sentiment, word_count, ave_sent_huliu, ave_sent_rinker, ave_sent_jockers,
-         syuzhet_syuzhet, ave_sent_stanford, SentimentGI, SentimentLM, SentimentQDAP) %>% 
-  pivot_longer(cols=c(ave_sent_huliu, ave_sent_rinker, ave_sent_jockers, ave_sent_stanford, syuzhet_syuzhet, SentimentGI, SentimentLM, SentimentQDAP)) %>% 
-  ggplot(aes(x=factor(sentiment), y = value)) + 
-    geom_violin(aes(fill = factor(name)), draw_quantiles=0.5) + 
-  geom_hline(yintercept = 0) +
-  scale_fill_discrete("lexicon") + 
-  labs(x="human annotated sentiment", 
-       y="sentiment score") + 
-  coord_flip()
-           
-```
-Ensemble approach with four "best" dictionaries.
-
-```{r sentiment-ensemble}
-
-bind_cols(dftest, s_hu[, c('word_count', 'ave_sent_huliu')], 
-          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
-          out1[, 'ave_sent_stanford']) %>%
-  select(aid, sentence, sentiment, word_count, 
-         ave_sent_huliu, 
-         ave_sent_rinker, 
-         ave_sent_jockers,
-         ave_sent_stanford) %>% 
-  pivot_longer(cols=c(ave_sent_rinker, ave_sent_huliu, ave_sent_jockers, ave_sent_stanford)) %>% 
-  #group_by(aid, sentiment, sentence) %>% summarise(med_sent = median(value), 
-   #                                           min_sent = min(value), 
-   #                                           max_sent = max(value)) %>%
-  ggplot(aes(x=factor(sentiment), y = value)) + 
-    geom_violin(aes(fill = factor(name)), draw_quantiles = 0.5) + 
-  #geom_point(size = 2, aes(col = factor(aid), shape=factor(name)), 
-  #           position=position_dodge(width=0.3)) +
-  #geom_errorbar(aes(ymin = min_sent, ymax = max_sent, 
-  #                  col = factor(aid)), 
-   #             position=position_dodge(width=0.2))
-  #scale_fill_discrete("lexicon") + 
-  labs(x="human annotated sentiment", 
-       y="sentiment score")
-
-```
-
-Use 4 best to model sentiment directions. Where confidence interval overlaps zero 
-then is neutral.
-```{r sentiment-direction-ensemble, fig.width=7, fig.height=4}
-bind_cols(dftest, s_hu[, c('word_count', 'ave_sent_huliu')], 
-          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
-          out1[, 'ave_sent_stanford']) %>% 
-  select(aid, sent_order, sentence, score, sentiment, word_count, 
-         ave_sent_huliu, 
-         ave_sent_rinker, 
-         ave_sent_jockers,
-         ave_sent_stanford) %>% 
-  pivot_longer(cols=c(ave_sent_rinker, ave_sent_huliu, ave_sent_jockers, ave_sent_stanford)) %>% 
-  ggplot(aes(x = sent_order, y = value)) + 
-  geom_hline(yintercept=0) +
-  geom_jitter(aes(colour = name)) + 
-  geom_line(aes(color = as.factor(name))) +
-  stat_smooth(method = "gam",formula = y ~ s(x, k = 13),
-              linetype="dashed") + 
-  labs(x="sentence order", 
-       y="sentiment score")
-```
-
 
 
 ```{r text-sentiment, eval=FALSE}
@@ -616,19 +490,193 @@ sentiment_phrases_reviews %>%
 ```
 
 
+## Text sentiment
 
-Abstract sentiment.
+Look at scores for simple phrases. Use example by Dr Joanna (Annie) Swafford (https://annieswafford.wordpress.com/2015/03/02/syuzhet/)
+
+```{r simple-sentiment, fig.width=7, fig.height=8}
+
+# added a few sentences to Annie Swafford example
+ase <- c( 
+  "What shall I do today?",
+  "Take a sad song and make it better.", 
+    "I am very pleased with it so far.",
+    "I haven't been sad in a long time.",
+    "I am extremely happy today.",
+    "It's a good day.",
+    "But suddenly I'm only a little bit happy.",
+    "Then I'm not happy at all.",
+    "In fact, I am now the least happy person on the planet.",
+    "There is no happiness left in me.",
+    "Wait, it's returned!",
+    "I don't feel so bad after all!",
+  "I think to myself what a wonderful world."
+)
+mysentiments <- c("neutral","positive", "positive", "neutral", "positive", "positive", "positive", "negative", "negative", "negative", "neutral", "neutral", "positive")
+myscores <- c(0, 0.75, 1, 0, 1, 1, 0.75, -0.5, -1, -1, 0, 0, 1) 
+myaid = paste("sent_", 
+                     c("01", "02", "03", "04", "05", "06", 
+                       "07", "08", "09", "10", "11", "12", "13"), sep="")
+dftest <- data.frame(sentence = ase, sentiment = mysentiments, score = myscores, 
+                     aid = myaid, sent_order = 1:13)
+s_rinker <- sentiment_by(dftest$sentence, 
+                         polarity_dt = lexicon::hash_sentiment_jockers_rinker, 
+                         question.weight = 0) %>% 
+  rename("ave_sent_rinker"="ave_sentiment")
+sort(unique(s_rinker$ave_sent_rinker))
+# Liu & HU (2004) 
+s_hu <- sentiment_by(dftest$sentence, 
+                     polarity_dt = lexicon::hash_sentiment_huliu, 
+                     question.weight = 0) %>% 
+  rename("ave_sent_huliu"="ave_sentiment")
+sort(unique(s_hu$ave_sent_huliu))
+s_jockers <- sentiment_by(dftest$sentence, 
+                     polarity_dt = lexicon::hash_sentiment_jockers, 
+                     question.weight = 0) %>% 
+  rename("ave_sent_jockers"="ave_sentiment")
+sort(unique(s_jockers$ave_sent_jockers))
+# SentimentAnalysis  
+# GI = Dictionary with opinionated words from the Harvard-IV dictionary as used in the General Inquirer software
+# LM = Loughran-McDonald Financial dictionary (Loughran and McDonald 2011)
+# QDAP = dictionary from the package qdapDictionaries
+sa <- SentimentAnalysis::analyzeSentiment(dftest$sentence) 
+
+# Stanford coreNLP
+out1 <- sentiment_stanford(dftest$sentence) %>% 
+  rename("ave_sent_stanford"="sentiment")
+#syuzhet
+sent_syuzhet <- get_sentiment(dftest$sentence, method="syuzhet")
+sent_bing <- get_sentiment(dftest$sentence, method="bing")
+sent_nrc <- get_sentiment(dftest$sentence, method="nrc")
+data.frame(score = sent_syuzhet, sent=dftest$sentiment)
+dfsyuzhet <- data.frame(syuzhet_syuzhet=sent_syuzhet, syuzhet_bing = sent_bing, 
+                        syuzhet_nrc=sent_nrc)
+class(dfsyuzhet[, 'syuzhet_syuzhet'])
+dfsyuzhet %>% select(syuzhet_syuzhet)
+#
+bind_cols(dftest, s_hu[, c('word_count', 'ave_sent_huliu')], 
+          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
+          out1[, 'ave_sent_stanford'], dfsyuzhet,
+          sa %>% select(WordCount, SentimentGI, SentimentLM, SentimentQDAP) 
+) %>% 
+  select(aid, sentence, sentiment, word_count, ave_sent_huliu, ave_sent_rinker, ave_sent_jockers,
+         syuzhet_syuzhet, syuzhet_bing, syuzhet_nrc, ave_sent_stanford, SentimentGI, SentimentLM, SentimentQDAP) %>% 
+  pivot_longer(cols=c(ave_sent_huliu, ave_sent_rinker, ave_sent_jockers, ave_sent_stanford, syuzhet_syuzhet,syuzhet_bing,syuzhet_nrc, SentimentGI, SentimentLM, SentimentQDAP)) %>% 
+  ggplot(aes(x=factor(sentiment), y = value, fill = factor(name))) + 
+    geom_violin(draw_quantiles=0.5) + 
+  geom_point(position=position_jitterdodge()) +
+  geom_hline(yintercept = 0) +
+  scale_fill_discrete("lexicon") + 
+  labs(x="human annotated sentiment", 
+       y="sentiment score") + 
+  coord_flip()
+           
+```
+Ensemble approach with four "best" dictionaries.
+
+```{r sentiment-ensemble}
+
+bind_cols(dftest, s_hu[, c('word_count', 'ave_sent_huliu')], 
+          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
+          out1[, 'ave_sent_stanford']) %>%
+  select(aid, sentence, sentiment, word_count, 
+         ave_sent_huliu, 
+         ave_sent_rinker, 
+         ave_sent_jockers,
+         ave_sent_stanford) %>% 
+  pivot_longer(cols=c(ave_sent_rinker, ave_sent_huliu, ave_sent_jockers, ave_sent_stanford)) %>% 
+  #group_by(aid, sentiment, sentence) %>% summarise(med_sent = median(value), 
+   #                                           min_sent = min(value), 
+   #                                           max_sent = max(value)) %>%
+  ggplot(aes(x=factor(sentiment), y = value)) + 
+    geom_violin(aes(fill = factor(name)), draw_quantiles = 0.5) + 
+  #geom_point(size = 2, aes(col = factor(aid), shape=factor(name)), 
+  #           position=position_dodge(width=0.3)) +
+  #geom_errorbar(aes(ymin = min_sent, ymax = max_sent, 
+  #                  col = factor(aid)), 
+   #             position=position_dodge(width=0.2))
+  #scale_fill_discrete("lexicon") + 
+  labs(x="human annotated sentiment", 
+       y="sentiment score")
+
+```
+
+Use 4 best sentiment lexicons to model sentiment directions. Where confidence interval overlaps zero then is neutral (?). Sentence nine is most problematic, with only one lexicon (Stanford) scoring this negative sentence correctly (sentence: "In fact, I am now the least happy person on the planet."). But Stanford also scores positive sentences as negative in one case.
+```{r sentiment-direction-ensemble, fig.width=7, fig.height=6, fig.cap="Comparison of human and automated sentiment scores. Annotaded scores by Darren (A) and four most consistent lexicon diciionaires (B). Coloured points and lines indicate different lexicon scores (points are dodged horizontally to avoid overlapping). Dashed line is prediciton from GAM model with grey shading showing 95% CI."}
+
+ggplot(dftest, aes(x=sent_order, y=score)) + 
+  geom_hline(yintercept=0) +
+  geom_point() + 
+  geom_line() + 
+  scale_x_continuous(breaks = c(1,3,5,7,9,11,13)) + 
+  labs(title = "(A) Human", 
+  x="sentence order", 
+       y="human annotated sentiment score") -> fig_sent_h
+
+bind_cols(dftest, s_hu[, c('word_count', 'ave_sent_huliu')], 
+          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
+          out1[, 'ave_sent_stanford']) %>% 
+  select(aid, sent_order, sentence, score, sentiment, word_count, 
+         ave_sent_huliu, 
+         ave_sent_rinker, 
+         ave_sent_jockers,
+         ave_sent_stanford) %>% 
+  pivot_longer(cols=c(ave_sent_rinker, ave_sent_huliu, ave_sent_jockers, ave_sent_stanford)) %>% 
+  ggplot(aes(x = sent_order, y = value)) + 
+  geom_hline(yintercept=0) +
+  geom_jitter(aes(colour = name)) + 
+  geom_line(aes(color = as.factor(name))) +
+  stat_smooth(method = "gam",formula = y ~ s(x, k = 13),
+              linetype="dashed") + 
+  scale_x_continuous(breaks = c(1,3,5,7,9,11,13)) +
+  labs(title="(B) Sentiment lexicon", 
+       x="sentence order", 
+       y="sentiment score") + 
+  theme(legend.position = c(0.7, 0.85)) + 
+  guides(color = guide_legend(nrow = 2)) -> fig_sent_lex
+
+grid.arrange(fig_sent_h, fig_sent_lex, nrow=2)
+```
+
+
+
+
+## Abstract sentiment.
+
+Repeat ensemble approach for Abstracts. Test with one optimistic, one neutral and one negative.
+```{r abstract-test-examples}
+
+# Test on an optimistic example
+ab_positive <- data.frame(doi= "10.1016/j.biocon.2019.02.022", 
+                          title = "Prospects for freshwater turtle population recovery are catalyzed by pan-Amazonian community-based management", 
+                          sentence = c("Sustainable use as a mechanism for the conservation and recovery of exploited wildlife populations remains intensely debated, including for freshwater turtles, a diverse and imperiled group of aquatic reptiles that are an important food source for many residents of tropical regions.", 
+                                       "Here we evaluated the geographical extent of recovery options for a heavily exploited tropical freshwater turtle fauna across 8.86 M km2 of South American river catchments under scenarios of Business-as-Usual (BAU), Protection (Pr) and Community-Based-Management (CBM).", 
+                                       "For the widespread indicator species, Podocnemis unifilis, demographic analysis showed that populations subject to moderate levels of female harvest (≤10%) can recover over broad areas if concurrent headstarting of hatchlings is practiced more widely.", 
+                                       "With regional strengthening of the protected area network unlikely, CBM developed with harvest frameworks derived from demographic rates appropriate to tropical species could catalyze a rapid continental scale recovery of Amazonian freshwater turtles within a few decades."), 
+                          sentiment = c("neutral", "neutral", "positive", "positive"), 
+                          score = c(0,0,0.5,0.75), 
+                          aid = c("01","02","03","04"), 
+                          sent_order = 1:4 
+)
+                          
+ab_negative <- data.frame(doi = "10.1126/science.aay5733", title = "Tropical snake diversity collapses after widespread amphibian loss", 
+                          sentence = c(
+                            "Biodiversity is declining at unprecedented rates worldwide.",
+                          "Yet cascading effects of biodiversity loss on other taxa are largely unknown because baseline data are often unavailable.", 
+                          "We document the collapse of a Neotropical snake community after the invasive fungal pathogen Batrachochytrium dendrobatidis caused a chytridiomycosis epizootic leading to the catastrophic loss of amphibians, a food source for snakes.", 
+                          "After mass mortality of amphibians, the snake community contained fewer species and was more homogeneous across the study site, with several species in poorer body condition, despite no other systematic changes in the environment.", 
+                          "The demise of the snake community after amphibian loss demonstrates the repercussive and often unnoticed consequences of the biodiversity crisis and calls attention to the invisible declines of rare and data-deficient species."), 
+                          sentiment = c("negative", "negative", "negative", "negative", "negative"), 
+                          score = c(-0.5, -0.25, -0.75, -0.75, -0.25),
+                          aid = c("01","02","03","04", "05"), sent_order = 1:5)                          
+
+
+
+```
+
 
 ```{r test-sentiment, eval=FALSE}
 alt_all <- readRDS("data/alt_all.rds")
-
-# Test on an optimistic example
-doi_positive <- "10.1016/j.biocon.2019.02.022"
-alt_all %>% 
-  filter(DI==doi_positive) %>% pull(AB) -> abstract_positive
-
-mytext <- sentimentr::get_sentences(abstract_positive)
-sentiment(mytext)
 
 # Abstracts
 alt_all[1:6, ] %>% 
