@@ -644,7 +644,7 @@ grid.arrange(fig_sent_h, fig_sent_lex, nrow=2)
 ## Abstract sentiment.
 
 Repeat ensemble approach for Abstracts. Test with one optimistic, one neutral and one negative.
-```{r abstract-test-examples}
+```{r abstract-test-data}
 
 # Test on an optimistic example
 ab_positive <- data.frame(doi= "10.1016/j.biocon.2019.02.022", 
@@ -669,11 +669,143 @@ ab_negative <- data.frame(doi = "10.1126/science.aay5733", title = "Tropical sna
                           sentiment = c("negative", "negative", "negative", "negative", "negative"), 
                           score = c(-0.5, -0.25, -0.75, -0.75, -0.25),
                           aid = c("01","02","03","04", "05"), sent_order = 1:5)                          
+bind_rows(ab_positive %>% mutate(ab_type = "positive"), 
+          ab_negative %>% mutate(ab_type = "negative")) -> ab
 
 
 
 ```
 
+Now get sentiments.
+```{r abstract_test_examples}
+s_rinker <- sentiment_by(ab$sentence, 
+                         polarity_dt = lexicon::hash_sentiment_jockers_rinker, 
+                         question.weight = 0) %>% 
+  rename("ave_sent_rinker"="ave_sentiment")
+sort(unique(s_rinker$ave_sent_rinker))
+# Liu & HU (2004) 
+s_hu <- sentiment_by(ab$sentence, 
+                     polarity_dt = lexicon::hash_sentiment_huliu, 
+                     question.weight = 0) %>% 
+  rename("ave_sent_huliu"="ave_sentiment")
+sort(unique(s_hu$ave_sent_huliu))
+s_jockers <- sentiment_by(ab$sentence, 
+                     polarity_dt = lexicon::hash_sentiment_jockers, 
+                     question.weight = 0) %>% 
+  rename("ave_sent_jockers"="ave_sentiment")
+sort(unique(s_jockers$ave_sent_jockers))
+# SentimentAnalysis  
+# GI = Dictionary with opinionated words from the Harvard-IV dictionary as used in the General Inquirer software
+# LM = Loughran-McDonald Financial dictionary (Loughran and McDonald 2011)
+# QDAP = dictionary from the package qdapDictionaries
+sa <- SentimentAnalysis::analyzeSentiment(ab$sentence) 
+
+# Stanford coreNLP
+out1 <- sentiment_stanford(ab$sentence) %>% 
+  rename("ave_sent_stanford"="sentiment")
+#syuzhet
+sent_syuzhet <- get_sentiment(ab$sentence, method="syuzhet")
+sent_bing <- get_sentiment(ab$sentence, method="bing")
+sent_nrc <- get_sentiment(ab$sentence, method="nrc")
+
+dfsyuzhet <- data.frame(syuzhet_syuzhet=sent_syuzhet, syuzhet_bing = sent_bing, 
+                        syuzhet_nrc=sent_nrc)
+
+```
+
+Plot test results. Dont use syuzhet for now (bing, nrc) as they are on different scales.
+```{r plot-abstract-test}
+
+bind_cols(ab, s_hu[, c('word_count', 'ave_sent_huliu')], 
+          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
+          out1[, 'ave_sent_stanford'], dfsyuzhet,
+          sa %>% select(WordCount, SentimentGI, SentimentLM, SentimentQDAP) 
+) %>% 
+  select(aid, sentence, sentiment, word_count, ave_sent_huliu, ave_sent_rinker, ave_sent_jockers, ave_sent_stanford,
+         #syuzhet_syuzhet, syuzhet_bing, syuzhet_nrc, 
+         SentimentGI, SentimentLM, SentimentQDAP) %>% 
+  pivot_longer(cols=c(ave_sent_huliu, ave_sent_rinker, ave_sent_jockers, ave_sent_stanford, 
+                      #syuzhet_syuzhet,syuzhet_bing,syuzhet_nrc, 
+                      SentimentGI, SentimentLM, SentimentQDAP)) %>% 
+  ggplot(aes(x=factor(sentiment), y = value, fill = factor(name))) + 
+    geom_boxplot() + 
+  geom_point(position=position_jitterdodge()) +
+  geom_hline(yintercept = 0) +
+  scale_fill_discrete("lexicon") + 
+  labs(x="human annotated sentiment", 
+       y="sentiment score") + 
+  coord_flip()
+
+```
+
+With 4 best. Predictions stay on correct direction. May not necessarily follow sentiments, but sentiment scores come from N = 1!!
+
+```{r plot-abstract-test-best}
+
+ggplot(ab, aes(x=sent_order, y=score)) + 
+  geom_hline(yintercept=0) +
+  geom_point() + 
+  geom_line() + 
+  scale_x_continuous(breaks = c(1,3,5,7,9,11,13)) + 
+  facet_wrap(~ab_type, nrow=1) +
+  labs(title = "(A) Human", 
+  x="sentence order", 
+       y="human annotated sentiment score") -> fig_sent_h
+
+bind_cols(ab, s_hu[, c('word_count', 'ave_sent_huliu')], 
+          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
+          out1[, 'ave_sent_stanford']) %>% 
+  select(ab_type, aid, sent_order, sentence, score, sentiment, word_count, 
+         ave_sent_huliu, 
+         ave_sent_rinker, 
+         ave_sent_jockers,
+         ave_sent_stanford) %>% 
+  pivot_longer(cols=c(ave_sent_rinker, ave_sent_huliu, ave_sent_jockers, ave_sent_stanford)) %>% 
+  ggplot(aes(x = sent_order, y = value)) + 
+  geom_hline(yintercept=0) +
+  geom_jitter(aes(colour = name)) + 
+  geom_line(aes(color = as.factor(name))) +
+  stat_smooth(method = "gam",formula = y ~ s(x, k = 4),
+              linetype="dashed") + 
+  scale_x_continuous(breaks = c(1,3,5,7,9,11,13)) + 
+  facet_wrap(~ab_type, nrow=1) +
+  labs(title="(B) Sentiment lexicon", 
+       x="sentence order", 
+       y="sentiment score") + 
+  theme(legend.position="none") -> fig_sent_lex
+
+grid.arrange(fig_sent_h, fig_sent_lex, nrow=2)
+
+
+```
+Number of words per sentence needs to be considered?
+```{r abstract-word-number}
+
+bind_cols(ab, s_hu[, c('word_count', 'ave_sent_huliu')], 
+          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
+          out1[, 'ave_sent_stanford']) %>% 
+  select(ab_type, aid, sent_order, sentence, score, sentiment, word_count, 
+         ave_sent_huliu, 
+         ave_sent_rinker, 
+         ave_sent_jockers,
+         ave_sent_stanford) %>% 
+  pivot_longer(cols=c(ave_sent_rinker, ave_sent_huliu, ave_sent_jockers, ave_sent_stanford)) %>% 
+  ggplot(aes(x = word_count, y = value)) + 
+  geom_hline(yintercept=0) +
+  geom_jitter(aes(colour = name)) + 
+  geom_line(aes(color = as.factor(name))) +
+  stat_smooth(method = "lm",
+              linetype="dashed") + 
+  facet_wrap(~ab_type, nrow=1) +
+  labs(x="sentence word count", 
+       y="sentiment score") + 
+  theme(legend.position="none")
+
+```
+
+
+
+Test on full data.
 
 ```{r test-sentiment, eval=FALSE}
 alt_all <- readRDS("data/alt_all.rds")
