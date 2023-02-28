@@ -1,0 +1,197 @@
+---
+title: "01_development"
+author: "Darren Norris"
+date: "`r Sys.Date()`"
+output:
+  bookdown::html_document2:
+    toc: yes
+    toc_float: yes
+    toc_depth: 3
+    fig_caption: yes
+  bookdown::pdf_document2:
+    toc: yes
+    toc_depth: 3
+    number_sections: yes
+    extra_dependencies: flafter
+    highlight: tango
+    includes:
+      in_header: preamble.txe
+always_allow_html: yes
+urlcolor: blue
+toc-title: Contents
+header-includes:
+  - \counterwithin{figure}{section}
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(
+  echo = TRUE, collapse = TRUE,
+  comment = "#>" 
+  )
+def_hook <- knit_hooks$get("output")
+knit_hooks$set(output = function(x, options) {
+  out <- def_hook(x, options)
+  return(paste("\\begin{framed}\\begin{verbatim}", x, "\\end{verbatim}\\end{framed}", collapse = "\n"))
+})
+```
+
+\newpage{}
+
+## Packages
+```{r load-packages, warning=FALSE, message=FALSE}
+# Data processing and presentation
+library(plyr) # plyr before tidyverse
+library(tidyverse)
+library(stringr)
+library(textclean)
+library(readxl)
+library(gridExtra)
+library(magrittr)
+
+```
+
+Load data
+```{r load-data}
+# Has Conservation Evidence from the following synopses Amphibian, Bat, Bird, Management of captive animals, marine and freshwater mammals, marine fish, primates, reptiles, terrestrial mammals
+cedat <- read_excel('data/studydat_fordarrenn_24_02_2023.xlsx')
+cedat %>% 
+  # with 2011 lose 97 bird studies
+  filter(publication.year>=2011) %>%
+  group_by(synopsis.name) %>% 
+  summarise(study_count = length(unique(study.id)))
+
+cedat %>% 
+  filter(publication.year>=2011) %>%
+  # 1094 articles
+  group_by(study.id, publication.year, publication.title, doi, url) %>% 
+  summarise(intervention_count = n()) %>% 
+  ungroup() -> cedat_studies
+
+```
+
+Get dois
+```{r get-dois}
+# Create new doi column to join with bibliometrics
+# clean out prefixes
+doi_prefix <- c("http://dx.doi.org/DOI:", "http://dx.doi.org/doi:", 
+"http://dx.doi.org/", "https://dx.doi.org/DOI:", "https://dx.doi.org/doi:", 
+"https://dx.doi.org/", 
+"DOI:", "http://doi.org/", "https://doi.org/")
+doi_prefix_string <- paste(doi_prefix,collapse="")
+#scopus seperator "&"
+journal_doi_prefix <- c( "http://www.asmjournals.org/doi/abs/",
+  "http://journals.sagepub.com/doi/abs/", 
+"http://link.springer.com/article/",  
+"https://link.springer.com/chapter/", 
+"https://link.springer.com/content/pdf/",
+"http://www.bioone.org/doi/abs/", "http://www.karger.com/DOI/", 
+"http://www.tandfonline.com/doi/abs/", 
+"https://besjournals.onlinelibrary.wiley.com/doi/epdf/",
+"https://besjournals.onlinelibrary.wiley.com/doi/abs/", 
+"https://journals.plos.org/plosone/article/file?id=", 
+"https://journals.plos.org/plosone/article?id=", 
+"https://link.springer.com/article/", 
+"https://www.frontiersin.org/articles/",
+"https://onlinelibrary.wiley.com/doi/epdf/",
+"https://onlinelibrary.wiley.com/doi/pdf/",
+"https://onlinelibrary.wiley.com/doi/abs/", 
+"https://onlinelibrary.wiley.com/doi/full/", 
+"https://onlinelibrary.wiley.com/doi/",
+"http://onlinelibrary.wiley.com/doi/", 
+"https://royalsocietypublishing.org/doi/pdf/",
+"https://wildlife.onlinelibrary.wiley.com/doi/abs/", 
+"https://wildlife.onlinelibrary.wiley.com/doi/pdf/",
+"https://zslpublications.onlinelibrary.wiley.com/doi/epdf/",
+"https://zslpublications.onlinelibrary.wiley.com/doi/pdf/",
+"https://zslpublications.onlinelibrary.wiley.com/doi/", 
+"https://www.scopus.com/inward/record.uri?eid=2-s2.0-84997426723&doi="
+)
+
+# No does not work
+# cedat_studies %>% 
+#  mutate(doi_bib = str_remove(doi, fixed(doi_prefix))) %>% 
+#  select(doi, doi_bib) %>% 
+#  filter(!is.na(doi))
+
+cedat_studies %>% 
+  mutate(doi_ce = str_replace(doi, doi_prefix[1], "")) %>% 
+  mutate(doi_ce = str_replace(doi_ce, doi_prefix[2], "")) %>% 
+  mutate(doi_ce = str_replace(doi_ce, doi_prefix[3], "")) %>% 
+  mutate(doi_ce = str_replace(doi_ce, doi_prefix[4], "")) %>% 
+  mutate(doi_ce = str_replace(doi_ce, doi_prefix[5], "")) %>% 
+  mutate(doi_ce = str_replace(doi_ce, doi_prefix[6], "")) %>% 
+  mutate(doi_ce = str_replace(doi_ce, doi_prefix[7], "")) %>% 
+  mutate(doi_ce = str_replace(doi_ce, doi_prefix[8], "")) %>% 
+  mutate(doi_ce = str_replace(doi_ce, doi_prefix[9], "")) %>% 
+  mutate(doi_ce = if_else(study.id ==7943 ,"10.1016/j.jnc.2015.03.007", doi_ce)) %>%
+  mutate(doi_ce = str_replace(doi_ce, "http://www.bioone.org/doi/abs/", "")) %>% 
+  mutate(doi_ce = str_replace(doi_ce, "https://link.springer.com/article/", "")) %>% 
+  mutate(doi_ce = str_replace(doi_ce, "https://onlinelibrary.wiley.com/doi/abs/", "")) %>%   mutate(doi_ce = str_replace(doi_ce, "NA", NA_character_)) %>% 
+  mutate(doi_url = str_replace(url, journal_doi_prefix[1], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[2], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[3], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[4], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[5], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[6], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[7], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[8], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[9], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[10], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[11], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[12], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[13], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[14], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[15], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[16], "")) %>% 
+    mutate(doi_url = str_replace(doi_url, journal_doi_prefix[17], "")) %>% 
+    mutate(doi_url = str_replace(doi_url, journal_doi_prefix[18], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[19], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[20], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[21], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[22], "")) %>% 
+    mutate(doi_url = str_replace(doi_url, journal_doi_prefix[23], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[24], "")) %>% 
+      mutate(doi_url = str_replace(doi_url, journal_doi_prefix[25], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[26], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, journal_doi_prefix[27], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, doi_prefix[1], "")) %>%
+  mutate(doi_url = str_replace(doi_url, doi_prefix[2], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, doi_prefix[3], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, doi_prefix[4], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, doi_prefix[5], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, doi_prefix[6], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, doi_prefix[7], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, doi_prefix[8], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, doi_prefix[9], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, "/abstract", "")) %>% 
+  mutate(doi_url = str_replace(doi_url, "/full", "")) %>% 
+  mutate(doi_url = str_replace(doi_url, "/pdf", "")) %>% 
+  mutate(doi_url = str_replace(doi_url, ".pdf", "")) -> cedat_study02
+
+
+cedat_study02 %>% 
+  mutate(url_flag = ifelse(str_detect(doi_url, "http"), 1, 0)) %>% 
+  mutate(doi_url = ifelse(url_flag==1, NA_character_, doi_url)) %>% 
+  mutate(doi_clean = coalesce(doi_ce, doi_url)) %>% 
+  filter(!is.na(doi_clean)) -> cedat_tidy
+```
+
+Now join with Abstracts from WOS search. 117 join at first attempt.
+Test and develop searches......
+```{r join-abstracts}
+alt_all <- readRDS("data/alt_all.rds")
+cedat_tidy %>% 
+  left_join(alt_all %>% select(DI, AB, SO, TC, altmetric), 
+            by=c("doi_clean"="DI")) %>% 
+  mutate(flag_na = ifelse(is.na(TC),1,0)) -> cedat_alt
+
+cedat_alt %>% 
+  group_by(SO) %>% summarise(count_na = sum(flag_na)) %>% 
+  arrange(desc(count_na))
+
+cedat_alt %>% 
+  filter(!is.na(SO)) #117
+
+```
+
