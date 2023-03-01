@@ -198,12 +198,8 @@ cedat_alt %>%
 
 ```
 
-Add Abstracts using crossref
+Add Abstracts using pubmed and crossref.
 ```{r abstracts-crossref}
-#library(pubmedR) #Error: HTTP failure: 400
-library(easyPubMed)
-library(bibliometrix)
-
 # crossref
 # Politely import Abstracts 
 # 1) helper functions
@@ -224,15 +220,16 @@ abs_crossref %>%
  filter(!is.na(ab_clean))
 
 #Pubmed
+#library(pubmedR) #Error: HTTP failure: 400
+library(easyPubMed)
+library(bibliometrix)
 #My API: ff5578bfd85d5a8281f602b4b6b9f1cc7e08
 api_key <- "ff5578bfd85d5a8281f602b4b6b9f1cc7e08"
 query <- "10.1016/j.biocon.2015.08.034[DOI]"
 
 # easypubmed
 source("R/safe_pubmedid.R")
-source("R/safe_pubmedfetch.R")
 source("R/get_pubmedids.R")
-source("R/get_pubmed_abstracts.R")
 pubmed_abs01 <- plyr::ddply(cedat_alt[1:100, ], .(doi_clean), .fun = get_pubmedids)
 pubmed_abs02 <- plyr::ddply(cedat_alt[101:200, ], .(doi_clean), .fun = get_pubmedids)
 pubmed_abs03 <- plyr::ddply(cedat_alt[201:300, ], .(doi_clean), .fun = get_pubmedids)

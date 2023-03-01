@@ -2,7 +2,7 @@ get_pubmedids <- function(x) {
   #get IDs
   library(easyPubMed)
   query_text <- paste(x$doi_clean, "[DOI]", sep="")
-  my_query <- safe_pubmedid(query_text)
+  my_query <- safe_pubmedid(query_text, api_key ="ff5578bfd85d5a8281f602b4b6b9f1cc7e08")
   
   if(is.null(my_query$error) & my_query$result$Count=="1"){
   pubmed_xmlt <- safe_pubmedfetch(my_query$result, format="xml")
