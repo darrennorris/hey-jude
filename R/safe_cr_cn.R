@@ -1,0 +1,1 @@
+safe_cr_cn <- purrr::safely(cr_cn, otherwise = NA)

@@ -184,10 +184,13 @@ Now join with Abstracts from WOS search. 117 join at first attempt.
 Test and develop searches......
 ```{r join-abstracts}
 alt_all <- readRDS("data/alt_all.rds")
+# Invalid doi
+cedat_alt %>% filter(doi_clean=="10.7325/7")
 cedat_tidy %>% 
   left_join(alt_all %>% select(DI, AB, SO, TC, altmetric), 
             by=c("doi_clean"="DI")) %>% 
-  mutate(flag_na = ifelse(is.na(TC),1,0)) -> cedat_alt
+  mutate(flag_na = ifelse(is.na(TC),1,0)) %>% 
+  filter(! doi_clean =="10.7325/7") -> cedat_alt
 
 cedat_alt %>% 
   group_by(SO) %>% summarise(count_na = sum(flag_na)) %>% 
@@ -196,20 +199,40 @@ cedat_alt %>%
 cedat_alt %>% 
   filter(!is.na(SO)) #118
 
+
 ```
 
-Add Abstracts using pubmed and crossref.
+Add Journals and Abstracts using crossref and pubmed.
 ```{r abstracts-crossref}
 # crossref
 # Politely import Abstracts 
 # 1) helper functions
+source("R/safe_cr_cn.R")
+source("R/get_cr_cn.R")
 source("R/safe_abstracts.R")
 source("R/get_abstracts.R")
+# Journals to go with dois
+out_crossref <- rcrossref::cr_cn(dois = "10.1016/j.biocon.2015.08.034", 
+                                 format = "bibentry")
+# Journal names 
+j01 <- plyr::ddply(cedat_alt[1:200, ], .(doi_clean), .fun = get_cr_cn)
+j02 <- plyr::ddply(cedat_alt[201:400, ], .(doi_clean), .fun = get_cr_cn)
+j03 <- plyr::ddply(cedat_alt[401:600, ], .(doi_clean), .fun = get_cr_cn)
+j04 <- plyr::ddply(cedat_alt[601:771, ], .(doi_clean), .fun = get_cr_cn) 
+bind_rows(j01, j02, j03, j04) %>% 
+  mutate(journal = str_replace_all(journal, "[^[:alnum:]]", " ")) %>% 
+  mutate(journal = str_replace(journal, "amp  mathsemicolon", "")) %>% 
+  mutate(journal = str_replace(journal, "Journal du Conseil", "")) %>%
+  mutate(journal = str_to_upper(str_squish(str_trim(journal)))) -> journal_names
 
+   
+# Abstracts
+"10.1111/acv.12189"
+t <- safe_abstracts(doi="10.1111/acv.12189")
 ab01 <- plyr::adply(cedat_alt[1:200, ], .margins = 1, .fun = get_abstracts)
 ab02 <- plyr::adply(cedat_alt[201:400, ], .margins = 1, .fun = get_abstracts)
 ab03 <- plyr::adply(cedat_alt[401:600, ], .margins = 1, .fun = get_abstracts)
-ab04 <- plyr::adply(cedat_alt[601:777, ], .margins = 1, .fun = get_abstracts)
+ab04 <- plyr::adply(cedat_alt[601:771, ], .margins = 1, .fun = get_abstracts)
 #join
 bind_rows(ab01, ab02, ab03, ab04) %>% 
   mutate(ab_text = 
@@ -226,7 +249,9 @@ library(bibliometrix)
 #My API: ff5578bfd85d5a8281f602b4b6b9f1cc7e08
 api_key <- "ff5578bfd85d5a8281f602b4b6b9f1cc7e08"
 query <- "10.1016/j.biocon.2015.08.034[DOI]"
-
+query2 <- "10.1111/acv.12189[DOI]"
+my_query <- safe_pubmedid(query2, 
+                          api_key ="ff5578bfd85d5a8281f602b4b6b9f1cc7e08")
 # easypubmed
 source("R/safe_pubmedid.R")
 source("R/get_pubmedids.R")
@@ -250,10 +275,26 @@ bind_rows(pubmed_abs01, pubmed_abs02, pubmed_abs03, pubmed_abs04, pubmed_abs05,
           pubmed_abs11, pubmed_abs12, pubmed_abs13, pubmed_abs14) %>% 
   distinct() %>% 
   mutate(ab_pubmed = str_to_upper(str_trim(ab_pubmed))) -> abs_pub
+
+# Dimensions
+library(dimensionsR)
+token <- dsAuth(username = "darren.norris@unifap.br", password = "Dimensions@78")
+
 abs_crossref %>% left_join(abs_pub) %>% 
-  mutate(ab_clean = coalesce(AB, ab_pubmed, ab_text)) -> abs_all
+  mutate(ab_clean = coalesce(AB, ab_pubmed, ab_text)) %>% 
+  left_join(journal_names) %>% 
+  mutate(journal_name = coalesce(SO, journal)) -> abs_all
 # 266 Abstracts
 abs_all %>% 
-  filter(!is.na(ab_clean))
+  filter(!is.na(ab_clean)) 
+# which journals have most mssing abstracts
+abs_all %>% 
+  filter(is.na(ab_clean)) %>% 
+  group_by(journal_name) %>% 
+  summarise(acount = n()) %>% arrange(desc(acount))
+
+abs_all %>% 
+  filter(is.na(ab_clean)) %>%
+  filter(journal_name =="ANIMAL CONSERVATION")
 ```
 
