@@ -1,0 +1,1 @@
+safe_abstracts <- purrr::safely(cr_abstract, otherwise = NA)

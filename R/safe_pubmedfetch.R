@@ -1,0 +1,1 @@
+safe_pubmedfetch <- purrr::safely(fetch_pubmed_data, otherwise = NA)

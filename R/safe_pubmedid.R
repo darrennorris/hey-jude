@@ -1,0 +1,1 @@
+safe_pubmedid <- purrr::safely(get_pubmed_ids, otherwise = NA)

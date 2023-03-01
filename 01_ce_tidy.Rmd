@@ -48,6 +48,7 @@ library(textclean)
 library(readxl)
 library(gridExtra)
 library(magrittr)
+library(rcrossref)
 
 ```
 
@@ -167,12 +168,14 @@ cedat_studies %>%
   mutate(doi_url = str_replace(doi_url, "/abstract", "")) %>% 
   mutate(doi_url = str_replace(doi_url, "/full", "")) %>% 
   mutate(doi_url = str_replace(doi_url, "/pdf", "")) %>% 
-  mutate(doi_url = str_replace(doi_url, ".pdf", "")) -> cedat_study02
+  mutate(doi_url = str_replace(doi_url, ".pdf", "")) %>% 
+  mutate(doi_url = str_replace(doi_url, "%2F", "/")) -> cedat_study02
 
 
 cedat_study02 %>% 
-  mutate(url_flag = ifelse(str_detect(doi_url, "http"), 1, 0)) %>% 
-  mutate(doi_url = ifelse(url_flag==1, NA_character_, doi_url)) %>% 
+  mutate(url_flag = ifelse(str_detect(doi_url, "http"), 1, 0), 
+         wos_flag = ifelse(str_detect(doi_url, "ISI"), 1, 0)) %>% 
+  mutate(doi_url = ifelse(url_flag==1 | wos_flag==1, NA_character_, doi_url)) %>% 
   mutate(doi_clean = coalesce(doi_ce, doi_url)) %>% 
   filter(!is.na(doi_clean)) -> cedat_tidy
 ```
@@ -191,7 +194,69 @@ cedat_alt %>%
   arrange(desc(count_na))
 
 cedat_alt %>% 
-  filter(!is.na(SO)) #117
+  filter(!is.na(SO)) #118
 
+```
+
+Add Abstracts using crossref
+```{r abstracts-crossref}
+#library(pubmedR) #Error: HTTP failure: 400
+library(easyPubMed)
+library(bibliometrix)
+
+# crossref
+# Politely import Abstracts 
+# 1) helper functions
+source("R/safe_abstracts.R")
+source("R/get_abstracts.R")
+
+ab01 <- plyr::adply(cedat_alt[1:200, ], .margins = 1, .fun = get_abstracts)
+ab02 <- plyr::adply(cedat_alt[201:400, ], .margins = 1, .fun = get_abstracts)
+ab03 <- plyr::adply(cedat_alt[401:600, ], .margins = 1, .fun = get_abstracts)
+ab04 <- plyr::adply(cedat_alt[601:777, ], .margins = 1, .fun = get_abstracts)
+#join
+bind_rows(ab01, ab02, ab03, ab04) %>% 
+  mutate(ab_text = 
+           str_to_upper(str_trim((str_replace(ab_text, "Abstract", ""))))) %>% 
+  mutate(ab_clean = coalesce(AB, ab_text)) -> abs_crossref
+# 223 with Abstracts
+abs_crossref %>% 
+ filter(!is.na(ab_clean))
+
+#Pubmed
+#My API: ff5578bfd85d5a8281f602b4b6b9f1cc7e08
+api_key <- "ff5578bfd85d5a8281f602b4b6b9f1cc7e08"
+query <- "10.1016/j.biocon.2015.08.034[DOI]"
+
+# easypubmed
+source("R/safe_pubmedid.R")
+source("R/safe_pubmedfetch.R")
+source("R/get_pubmedids.R")
+source("R/get_pubmed_abstracts.R")
+pubmed_abs01 <- plyr::ddply(cedat_alt[1:100, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs02 <- plyr::ddply(cedat_alt[101:200, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs03 <- plyr::ddply(cedat_alt[201:300, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs04 <- plyr::ddply(cedat_alt[301:400, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs05 <- plyr::ddply(cedat_alt[401:450, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs06 <- plyr::ddply(cedat_alt[451:475, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs07 <- plyr::ddply(cedat_alt[476:480, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs08 <- plyr::ddply(cedat_alt[481:490, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs09 <- plyr::ddply(cedat_alt[491:500, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs10 <- plyr::ddply(cedat_alt[501:600, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs11 <- plyr::ddply(cedat_alt[601:700, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs12 <- plyr::ddply(cedat_alt[701:730, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs13 <- plyr::ddply(cedat_alt[731:760, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs14 <- plyr::ddply(cedat_alt[761:772, ], .(doi_clean), .fun = get_pubmedids)
+
+bind_rows(pubmed_abs01, pubmed_abs02, pubmed_abs03, pubmed_abs04, pubmed_abs05, 
+          pubmed_abs06, pubmed_abs07, pubmed_abs08, pubmed_abs09, pubmed_abs10, 
+          pubmed_abs11, pubmed_abs12, pubmed_abs13, pubmed_abs14) %>% 
+  distinct() %>% 
+  mutate(ab_pubmed = str_to_upper(str_trim(ab_pubmed))) -> abs_pub
+abs_crossref %>% left_join(abs_pub) %>% 
+  mutate(ab_clean = coalesce(AB, ab_pubmed, ab_text)) -> abs_all
+# 266 Abstracts
+abs_all %>% 
+  filter(!is.na(ab_clean))
 ```
 
