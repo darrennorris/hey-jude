@@ -55,6 +55,13 @@ library(rcrossref)
 Load data
 ```{r load-data}
 # Has Conservation Evidence from the following synopses Amphibian, Bat, Bird, Management of captive animals, marine and freshwater mammals, marine fish, primates, reptiles, terrestrial mammals
+# 2013 Bird
+# 2014 Amphibian
+# 2017 Primate
+# 2018 Management of Captive Animals
+# 2020 Terrestrial Mammal
+# 2021 Bat, Reptile, Marine and Freshwater Mammal, Marine Fish
+# Few Conservation Biology and Biodiversity and Conservation 
 cedat <- read_excel('data/studydat_fordarrenn_24_02_2023.xlsx')
 cedat %>% 
   # with 2011 lose 97 bird studies
@@ -79,6 +86,11 @@ cedat_studies %>%
 # 260 dois not NA
 cedat_studies %>% 
   filter(!is.na(doi)) %>% nrow()
+
+cedat_studies %>% 
+  filter(!is.na(journal.name)) %>% 
+  group_by(journal.name) %>% summarise(article_count = n()) %>% 
+  arrange(desc(article_count))
 
 ```
 
@@ -223,6 +235,11 @@ Now join with Abstracts from WOS search. 117 join at first attempt.
 Test and develop searches......
 ```{r join-abstracts}
 alt_all <- readRDS("data/alt_all.rds")
+alt_all %>% 
+  filter(!is.na(DI), PY>=2011) %>% 
+  distinct() %>%
+  group_by(SO) %>% summarise(count_articles = n()) %>% 
+  arrange(desc(count_articles))
 # Invalid doi
 cedat_alt %>% filter(doi_clean=="10.7325/7")
 cedat_tidy %>% 
