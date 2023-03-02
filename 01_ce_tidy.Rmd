@@ -62,7 +62,12 @@ Load data
 # 2020 Terrestrial Mammal
 # 2021 Bat, Reptile, Marine and Freshwater Mammal, Marine Fish
 # Few Conservation Biology and Biodiversity and Conservation 
-cedat <- read_excel('data/studydat_fordarrenn_24_02_2023.xlsx')
+# 7874 - doi incorrect. Use manually adjusted dois
+# 10316 - doi incorrect duplicate of 10478
+# 8599 doi duplicate of 8598
+# 10475 url duplicate of 10237
+
+cedat <- read_excel('data/studydat_fordarrenn_24_02_2023DN.xlsx')
 cedat %>% 
   # with 2011 lose 97 bird studies
   filter(publication.year>=2011) %>%
@@ -71,7 +76,7 @@ cedat %>%
 
 cedat %>% 
   filter(publication.year>=2011) %>%
-  # 1094 articles
+  # 1094 studies
   group_by(study.id, publication.year, publication.title, 
            journal.name,doi, url) %>% 
   summarise(intervention_count = n()) %>% 
@@ -80,10 +85,10 @@ cedat_studies %>% nrow() #1094
 # 35 not journals
 cedat_studies %>% 
   filter(is.na(journal.name)) %>% nrow()
-# 834 dois are NA
+# 819 dois are NA
 cedat_studies %>% 
   filter(is.na(doi)) %>% nrow()
-# 260 dois not NA
+# 275 dois not NA
 cedat_studies %>% 
   filter(!is.na(doi)) %>% nrow()
 
@@ -205,7 +210,7 @@ cedat_studies %>%
   mutate(doi_url = str_replace(doi_url, fixed("&partnerID=40&md5=1af9d56b08f7404744b5e497fda4cd24"), "")) %>% 
   mutate(doi_url = str_replace(doi_url, fixed("&partnerID=40&md5=5c317266eef42c4e3e99d4ca26b2db29"), "")) -> cedat_study02
  
-cedat_study02 %>% filter(journal.name=="Biological Conservation", is.na(doi))
+#cedat_study02 %>% filter(journal.name=="Biological Conservation", is.na(doi))
 
 cedat_study02 %>% 
   mutate(url_flag = ifelse(str_detect(doi_url, "http"), 1, 0), 
@@ -213,8 +218,8 @@ cedat_study02 %>%
   mutate(doi_url = ifelse(url_flag==1 | wos_flag==1, NA_character_, doi_url)) %>% 
   mutate(doi_clean = coalesce(doi_ce, doi_url)) %>% 
   filter(!is.na(doi_clean)) -> cedat_tidy
-sum(cedat_tidy$url_flag) # 149
-cedat_tidy %>% filter(!is.na(doi_clean)) %>% nrow() # 780
+sum(cedat_tidy$url_flag) # 0
+cedat_tidy %>% filter(!is.na(doi_clean)) %>% nrow() # 795
 
 
 # Now science direct (36 articles)
@@ -231,7 +236,8 @@ filter(is.na(doi_ce) ,sci_flag ==1) %>%
 
 ```
 
-Now join with Abstracts from WOS search. 117 join at first attempt.
+Now join with Abstracts from WOS search. 117 join at first attempt. 
+127 after more dois tidied.
 Test and develop searches......
 ```{r join-abstracts}
 alt_all <- readRDS("data/alt_all.rds")
@@ -241,20 +247,32 @@ alt_all %>%
   group_by(SO) %>% summarise(count_articles = n()) %>% 
   arrange(desc(count_articles))
 # Invalid doi
-cedat_alt %>% filter(doi_clean=="10.7325/7")
 cedat_tidy %>% 
+  separate(doi_clean, into=c("doi_clean", NA), sep=" ") %>%
   left_join(alt_all %>% select(DI, AB, SO, TC, altmetric), 
             by=c("doi_clean"="DI")) %>% 
   mutate(flag_na = ifelse(is.na(TC),1,0)) %>% 
-  filter(! doi_clean =="10.7325/7") -> cedat_alt
+  filter(! doi_clean =="10.7325/7") %>% 
+  mutate(flag_search = if_else(is.na(SO),0,1), 
+         flag_ce = 1) -> cedat_alt
+# check doi is unique (max should be 1)
+cedat_alt %>% 
+  group_by(doi_clean) %>% summarise(count_articles = n()) %>% 
+  arrange(desc(count_articles)) %>% pull(count_articles) %>% max()
 
 cedat_alt %>% 
   group_by(SO) %>% summarise(count_na = sum(flag_na)) %>% 
   arrange(desc(count_na))
 
 cedat_alt %>% 
-  filter(!is.na(SO)) #122
-
+  filter(!is.na(SO)) #127
+# Find CE articles missed by my search
+cedat_alt %>%
+  filter(!is.na(journal.name)) %>%
+  group_by(journal.name) %>% 
+    summarise(count_articles = length(unique(study.id)), 
+              count_both = sum(flag_search)) %>% 
+  arrange(desc(count_articles))
 
 ```
 
@@ -270,31 +288,37 @@ source("R/get_abstracts.R")
 # Journals to go with dois
 out_crossref <- rcrossref::cr_cn(dois = "10.1016/j.biocon.2015.08.034", 
                                  format = "bibentry")
-# Journal names 
+# Journal names (so can double check CE)
 j01 <- plyr::ddply(cedat_alt[1:200, ], .(doi_clean), .fun = get_cr_cn)
 j02 <- plyr::ddply(cedat_alt[201:400, ], .(doi_clean), .fun = get_cr_cn)
 j03 <- plyr::ddply(cedat_alt[401:600, ], .(doi_clean), .fun = get_cr_cn)
-j04 <- plyr::ddply(cedat_alt[601:771, ], .(doi_clean), .fun = get_cr_cn) 
+j04 <- plyr::ddply(cedat_alt[601:795, ], .(doi_clean), .fun = get_cr_cn) 
+# stick together
 bind_rows(j01, j02, j03, j04) %>% 
   mutate(journal = str_replace_all(journal, "[^[:alnum:]]", " ")) %>% 
   mutate(journal = str_replace(journal, "amp  mathsemicolon", "")) %>% 
   mutate(journal = str_replace(journal, "Journal du Conseil", "")) %>%
   mutate(journal = str_to_upper(str_squish(str_trim(journal)))) -> journal_names
-
-   
+# check doi is unique (max should be 1)
+cedat_alt %>% 
+  group_by(doi_clean) %>% summarise(count_journals = n()) %>% 
+  arrange(desc(count_journals)) %>% pull(count_journals) %>% max()
+# 9 missing with doi
+cedat_alt %>% left_join(journal_names) %>% filter(is.na(journal))
 # Abstracts
 "10.1111/acv.12189"
 t <- safe_abstracts(doi="10.1111/acv.12189")
 ab01 <- plyr::adply(cedat_alt[1:200, ], .margins = 1, .fun = get_abstracts)
 ab02 <- plyr::adply(cedat_alt[201:400, ], .margins = 1, .fun = get_abstracts)
 ab03 <- plyr::adply(cedat_alt[401:600, ], .margins = 1, .fun = get_abstracts)
-ab04 <- plyr::adply(cedat_alt[601:771, ], .margins = 1, .fun = get_abstracts)
-#join
+ab04 <- plyr::adply(cedat_alt[601:795, ], .margins = 1, .fun = get_abstracts)
+
+# stick together
 bind_rows(ab01, ab02, ab03, ab04) %>% 
   mutate(ab_text = 
            str_to_upper(str_trim((str_replace(ab_text, "Abstract", ""))))) %>% 
   mutate(ab_clean = coalesce(AB, ab_text)) -> abs_crossref
-# 223 with Abstracts
+# 233 with Abstracts
 abs_crossref %>% 
  filter(!is.na(ab_clean))
 
@@ -313,23 +337,20 @@ source("R/safe_pubmedid.R")
 source("R/get_pubmedids.R")
 pubmed_abs01 <- plyr::ddply(cedat_alt[1:100, ], .(doi_clean), .fun = get_pubmedids)
 pubmed_abs02 <- plyr::ddply(cedat_alt[101:200, ], .(doi_clean), .fun = get_pubmedids)
-pubmed_abs03 <- plyr::ddply(cedat_alt[201:300, ], .(doi_clean), .fun = get_pubmedids)
-pubmed_abs04 <- plyr::ddply(cedat_alt[301:400, ], .(doi_clean), .fun = get_pubmedids)
-pubmed_abs05 <- plyr::ddply(cedat_alt[401:450, ], .(doi_clean), .fun = get_pubmedids)
-pubmed_abs06 <- plyr::ddply(cedat_alt[451:475, ], .(doi_clean), .fun = get_pubmedids)
-pubmed_abs07 <- plyr::ddply(cedat_alt[476:480, ], .(doi_clean), .fun = get_pubmedids)
-pubmed_abs08 <- plyr::ddply(cedat_alt[481:490, ], .(doi_clean), .fun = get_pubmedids)
-pubmed_abs09 <- plyr::ddply(cedat_alt[491:500, ], .(doi_clean), .fun = get_pubmedids)
-pubmed_abs10 <- plyr::ddply(cedat_alt[501:600, ], .(doi_clean), .fun = get_pubmedids)
-pubmed_abs11 <- plyr::ddply(cedat_alt[601:700, ], .(doi_clean), .fun = get_pubmedids)
-pubmed_abs12 <- plyr::ddply(cedat_alt[701:730, ], .(doi_clean), .fun = get_pubmedids)
-pubmed_abs13 <- plyr::ddply(cedat_alt[731:760, ], .(doi_clean), .fun = get_pubmedids)
-pubmed_abs14 <- plyr::ddply(cedat_alt[761:772, ], .(doi_clean), .fun = get_pubmedids)
-
+pubmed_abs03 <- plyr::ddply(cedat_alt[201:400, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs04 <- plyr::ddply(cedat_alt[401:450, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs05 <- plyr::ddply(cedat_alt[451:475, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs06 <- plyr::ddply(cedat_alt[476:500, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs07 <- plyr::ddply(cedat_alt[501:550, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs08 <- plyr::ddply(cedat_alt[551:600, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs09 <- plyr::ddply(cedat_alt[601:650, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs10 <- plyr::ddply(cedat_alt[651:700, ], .(doi_clean), .fun = get_pubmedids)
+pubmed_abs11 <- plyr::ddply(cedat_alt[701:750, ], .(doi_clean), .fun = get_pubmedids) 
+pubmed_abs12 <- plyr::ddply(cedat_alt[751:795, ], .(doi_clean), .fun = get_pubmedids)
+# stick together 795 to 775 with distinct
 bind_rows(pubmed_abs01, pubmed_abs02, pubmed_abs03, pubmed_abs04, pubmed_abs05, 
           pubmed_abs06, pubmed_abs07, pubmed_abs08, pubmed_abs09, pubmed_abs10, 
-          pubmed_abs11, pubmed_abs12, pubmed_abs13, pubmed_abs14) %>% 
-  distinct() %>% 
+          pubmed_abs11, pubmed_abs12) %>%   distinct() %>% 
   mutate(ab_pubmed = str_to_upper(str_trim(ab_pubmed))) -> abs_pub
 
 # Dimensions
@@ -343,7 +364,7 @@ abs_crossref %>% left_join(abs_pub) %>%
   mutate(ab_clean = str_squish(str_trim(coalesce(AB, ab_pubmed, ab_text)))) %>% 
   left_join(journal_names) %>% 
   mutate(journal_name = coalesce(SO, journal)) -> abs_all
-# 266 Abstracts
+# 280 Abstracts
 abs_all %>% 
   filter(!is.na(ab_clean)) 
 # which journals have most missing abstracts
@@ -363,7 +384,7 @@ cedat_studies %>%
               select(study.id, doi_clean, ab_clean)) %>% 
   mutate(doi_url = if_else(is.na(doi_clean), doi_clean, paste("https://doi.org/", doi_clean, sep=""))) %>% 
   select(study.id, publication.year,publication.title, journal.name, doi, url, doi_clean, doi_url, ab_clean, intervention_count) -> out_cedat_dois
-# 266 Abstracts
+# 280 Abstracts
 out_cedat_dois %>% filter(!is.na(ab_clean)) %>% nrow()
 # Find which to update/tidy more
 out_cedat_dois %>% 
@@ -376,6 +397,11 @@ out_cedat_dois %>%
             na_ab = sum(flag_na_ab)) %>% 
   arrange(desc(na_doi)) %>% 
   filter(na_doi > 0, na_doi < tot_articles) -> cedat_tocheck
+#compare with original data
+out_cedat_dois %>% 
+  filter(!is.na(journal.name), !is.na(doi_clean)) %>% 
+  group_by(journal.name) %>% summarise(article_count = n()) %>% 
+  arrange(desc(article_count))
 
 out_cedat_dois  %>% 
   write.csv("data/cedat_cleandois.csv", row.names = FALSE) 
