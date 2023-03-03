@@ -70,9 +70,16 @@ Load data
 cedat <- read_excel('data/studydat_fordarrenn_24_02_2023DN.xlsx')
 cedat %>% 
   # with 2011 lose 97 bird studies
-  filter(publication.year>=2011) %>%
+  #filter(publication.year>=2011) %>%
   group_by(synopsis.name) %>% 
   summarise(study_count = length(unique(study.id)))
+
+cedat %>% 
+  # with 2011 lose 97 bird studies
+  filter(synopsis.name=="Bird Conservation") %>%
+  group_by(journal.name) %>% 
+  summarise(study_count = length(unique(study.id))) %>% 
+  arrange(desc(study_count))
 
 cedat %>% 
   filter(publication.year>=2011) %>%
