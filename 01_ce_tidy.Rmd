@@ -52,7 +52,12 @@ library(rcrossref)
 
 ```
 
-Load data
+## Load CE data
+ CE https://www.conservationevidence.com/content/page/111 
+ "Finding documented evidence" lists inclusion criteria
+- There must have been an intervention that conservationists would do.
+- Its effects must have been monitored quantitatively and documented.
+Does not include studies that solely report monitoring methods, species ecology, biodiversity surveys, or threats to biodiversity.
 ```{r load-data}
 # Has Conservation Evidence from the following synopses Amphibian, Bat, Bird, Management of captive animals, marine and freshwater mammals, marine fish, primates, reptiles, terrestrial mammals
 # 2013 Bird
@@ -106,7 +111,20 @@ cedat_studies %>%
 
 ```
 
-Get dois
+### Add birds
+CE searched 3 March 2023. Filter birds and years 2011 - 2022 = 53 studies.
+https://www.conservationevidence.com/data/studies?pp=100&broad_id%5B%5D=2&country%5B%5D=&result_type=references&sort=publication_year#searchcontainer
+
+```{r}
+library(synthesisr)
+cebird <- read_refs(
+  filename = "data/2023-03-03.ris",
+  return_df = TRUE)
+
+```
+
+
+## Get dois from CE data.
 ```{r get-dois}
 # Create new doi column to join with bibliometrics
 # clean out prefixes
@@ -115,7 +133,7 @@ doi_prefix <- c("http://dx.doi.org/DOI:", "http://dx.doi.org/doi:",
 "https://dx.doi.org/", 
 "DOI:", "http://doi.org/", "https://doi.org/")
 doi_prefix_string <- paste(doi_prefix,collapse="")
-#scopus seperator "&"
+
 journal_doi_prefix <- c( "http://www.asmjournals.org/doi/abs/",
 "http://link.springer.com/article/",  
 "https://link.springer.com/chapter/", 
@@ -217,7 +235,64 @@ cedat_studies %>%
   mutate(doi_url = str_replace(doi_url, fixed("&partnerID=40&md5=1af9d56b08f7404744b5e497fda4cd24"), "")) %>% 
   mutate(doi_url = str_replace(doi_url, fixed("&partnerID=40&md5=5c317266eef42c4e3e99d4ca26b2db29"), "")) -> cedat_study02
  
-#cedat_study02 %>% filter(journal.name=="Biological Conservation", is.na(doi))
+# birds
+cebird %>%
+  mutate(url = str_trim(url)) %>%
+  mutate(doi_url = str_replace(url, fixed(journal_doi_prefix[1]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[2]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[3]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[4]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[5]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[6]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[7]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[8]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[9]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[10]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[11]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[12]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[13]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[14]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[15]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[16]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[17]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[18]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[19]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[20]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[21]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[22]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[23]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[24]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[25]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[26]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[27]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[28]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[29]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[30]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[31]), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, doi_prefix[1], "")) %>%
+  mutate(doi_url = str_replace(doi_url, doi_prefix[2], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, doi_prefix[3], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, doi_prefix[4], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, doi_prefix[5], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, doi_prefix[6], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, doi_prefix[7], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, doi_prefix[8], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, doi_prefix[9], "")) %>% 
+  mutate(doi_url = str_replace(doi_url, "/abstract", "")) %>% 
+  mutate(doi_url = str_replace(doi_url, "/full", "")) %>% 
+  mutate(doi_url = str_replace(doi_url, "/pdf", "")) %>% 
+  mutate(doi_url = str_replace(doi_url, ".pdf", "")) %>% 
+  mutate(doi_url = str_replace(doi_url, "%2F", "/")) %>% 
+  mutate(doi_url = str_replace(doi_url, "%2f", "/")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed("&type=printable"), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed("&partnerID=40&md5=e7e28a9bcf2a253ad4cdbc1c807581c1"), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed("&partnerID=40&md5=69d21e627f92cd4b6f3c9837c45d6f2c"), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed("&partnerID=40&md5=1af9d56b08f7404744b5e497fda4cd24"), "")) %>% 
+  mutate(doi_url = str_replace(doi_url, fixed("&partnerID=40&md5=5c317266eef42c4e3e99d4ca26b2db29"), "")) -> cebird02
+
+# Manually include some missing dois
+write.csv(cebird02, "data/cebird.csv", row.names = FALSE)
+cebird03 <- read.csv("data/cebird.csv")
 
 cedat_study02 %>% 
   mutate(url_flag = ifelse(str_detect(doi_url, "http"), 1, 0), 
@@ -228,6 +303,13 @@ cedat_study02 %>%
 sum(cedat_tidy$url_flag) # 0
 cedat_tidy %>% filter(!is.na(doi_clean)) %>% nrow() # 795
 
+cebird03 %>% 
+  mutate(url_flag = ifelse(str_detect(doi_url, "http"), 1, 0), 
+         www_flag = ifelse(str_detect(doi_url, "www"), 1, 0), 
+         wos_flag = ifelse(str_detect(doi_url, "ISI"), 1, 0)) %>% 
+  mutate(doi_url = ifelse(url_flag==1 |www_flag==1 |wos_flag==1, NA_character_, doi_url)) %>% 
+  mutate(doi_clean = doi_url) %>% 
+  filter(!is.na(doi_clean)) -> cebird_tidy
 
 # Now science direct (36 articles)
 library(rscopus) # via UNIFAP
@@ -300,6 +382,7 @@ j01 <- plyr::ddply(cedat_alt[1:200, ], .(doi_clean), .fun = get_cr_cn)
 j02 <- plyr::ddply(cedat_alt[201:400, ], .(doi_clean), .fun = get_cr_cn)
 j03 <- plyr::ddply(cedat_alt[401:600, ], .(doi_clean), .fun = get_cr_cn)
 j04 <- plyr::ddply(cedat_alt[601:795, ], .(doi_clean), .fun = get_cr_cn) 
+
 # stick together
 bind_rows(j01, j02, j03, j04) %>% 
   mutate(journal = str_replace_all(journal, "[^[:alnum:]]", " ")) %>% 
@@ -359,7 +442,12 @@ bind_rows(pubmed_abs01, pubmed_abs02, pubmed_abs03, pubmed_abs04, pubmed_abs05,
           pubmed_abs06, pubmed_abs07, pubmed_abs08, pubmed_abs09, pubmed_abs10, 
           pubmed_abs11, pubmed_abs12) %>%   distinct() %>% 
   mutate(ab_pubmed = str_to_upper(str_trim(ab_pubmed))) -> abs_pub
-
+# birds 
+j05 <- plyr::ddply(cebird_tidy, .(doi_clean), .fun = get_cr_cn) 
+ab05 <- plyr::adply(cebird_tidy, .margins = 1, .fun = get_abstracts)
+pubmed_abs13 <- plyr::ddply(cebird_tidy, .(doi_clean), .fun = get_pubmedids)
+# stick together. Only 2 Abstracts.
+cebird_tidy %>% left_join(ab05) %>% left_join(pubmed_abs13) -> abs_brids
 # Dimensions
 library(dimensionsR)
 token <- dsAuth(username = "darren.norris@unifap.br", password = "Dimensions@78")
@@ -413,5 +501,10 @@ out_cedat_dois %>%
 out_cedat_dois  %>% 
   write.csv("data/cedat_cleandois.csv", row.names = FALSE) 
   
+```
+
+Save workspace.
+```{r }
+save.image("~/Articles/2024_Norris_trytofail/hey-jude/data/ce_abstracts.RData")
 ```
 
