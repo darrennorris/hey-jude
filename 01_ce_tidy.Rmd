@@ -523,21 +523,28 @@ abs_brids %>% filter(!is.na(doi_clean)) %>% select(ID, doi_clean) %>%
 Add Zhang Abstracts and export final.
 ```{r}
 zhang_abs <- readRDS("data/zhang_abss.RDS")
-bind_rows(
+
 cedat_studies %>% 
-  left_join(abs_all %>% left_join(zhang_abs %>% select(study.id, AB) %>% distinct() %>%
-                        rename("ABzhang"="AB")) %>% 
+  left_join( 
+    abs_all %>% 
+              left_join(zhang_abs %>% select(study.id, AB) %>% distinct() %>%
+                        rename("ABzhang"="AB") %>% 
+                          mutate(ABzhang = str_replace(ABzhang, 
+                                                       fixed("[NO ABSTRACT AVAILABLE]"), NA_character_))) %>%
   mutate(ab_clean = str_to_upper(coalesce(AB, ABzhang, ab_pubmed, ab_text))) %>% 
     filter(study.id %in% sids) %>% 
               select(study.id, doi_clean, ab_clean)) %>%
   mutate(doi_url = if_else(is.na(doi_clean), doi_clean, paste("https://doi.org/", doi_clean, sep=""))) %>% 
   #filter(!is.na(ab_clean))  #507 abstracts
-select(study.id, publication.year,publication.title, journal.name, doi, url, doi_clean, doi_url, ab_clean, intervention_count),
+select(study.id, publication.year,publication.title, journal.name, doi, url, doi_clean, doi_url, ab_clean, intervention_count) -> t1
 
-cebird %>% left_join(abs_brids %>% 
+cebird %>% 
+  left_join(abs_brids %>% 
   rename("study.id"="ID") %>% 
-  left_join(zhang_abs %>% select(study.id, AB) %>% distinct() %>%
+    left_join(zhang_abs %>% select(study.id, AB) %>% distinct() %>%
                         rename("ABzhang"="AB")) %>% 
+           mutate(ABzhang = str_replace(ABzhang, 
+                                        fixed("[NO ABSTRACT AVAILABLE]"), NA_character_)) %>% 
   mutate(ab_clean = str_to_upper(coalesce(AB, ABzhang, ab_pubmed, ab_text)), 
          study.id = as.character(study.id)) %>% 
     select(study.id, doi_clean, ab_clean), 
@@ -552,10 +559,13 @@ cebird %>% left_join(abs_brids %>%
          publication.year = as.numeric(publication.year), 
          doi=NA, 
          intervention_count=NA) %>% 
-  select(study.id, publication.year,publication.title, journal.name, doi, url, doi_clean, doi_url, ab_clean, intervention_count)
-)  -> out_doi_ab
-out_doi_ab %>% filter (!is.na(doi_clean)) %>% nrow() #806 DOIS
-out_doi_ab %>% filter (!is.na(ab_clean)) %>% nrow() # 518 Abstracts
+  select(study.id, publication.year,publication.title, journal.name, doi, url, doi_clean, doi_url, ab_clean, intervention_count) -> t2
+# bind together
+bind_rows(t1, t2) %>% 
+  mutate(ab_clean = str_squish(str_trim(str_to_upper(ab_clean)))) -> out_doi_ab
+# how many?
+out_doi_ab %>% filter(!is.na(doi_clean)) %>% nrow() #806 DOIS
+out_doi_ab %>% filter(!is.na(ab_clean)) %>% nrow() # 517 Abstracts
 # Export  
 out_doi_ab %>% write.csv("data/cedat_cleandois.csv", row.names = FALSE) 
 
