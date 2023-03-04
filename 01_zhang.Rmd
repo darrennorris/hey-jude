@@ -38,8 +38,14 @@ knit_hooks$set(output = function(x, options) {
 
 \newpage{}
 
-Zhang
+Zhang 2023 https://doi.org/10.1016/j.oneear.2023.01.003
+Data from https://doi.org/10.6084/m9.figshare.21723476
 ```{r}
+load("~/Articles/2024_Norris_trytofail/Zhang_2023_code_data/Rawdata.Rdata")
 ce_dois <- read_rds("data/ce_dois.RDS")
+ce_dois %>% left_join(merge.dat, by=c("doi_clean"= "DI")) %>% 
+  filter(!is.na(AU)) -> zhang_abs
+write_rds(zhang_abs, "data/zhang_abss.RDS")
+  
 ```
 

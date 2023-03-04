@@ -447,7 +447,8 @@ j05 <- plyr::ddply(cebird_tidy, .(doi_clean), .fun = get_cr_cn)
 ab05 <- plyr::adply(cebird_tidy, .margins = 1, .fun = get_abstracts)
 pubmed_abs13 <- plyr::ddply(cebird_tidy, .(doi_clean), .fun = get_pubmedids)
 # stick together. Only 2 Abstracts.
-cebird_tidy %>% left_join(ab05) %>% left_join(pubmed_abs13) -> abs_brids
+cebird_tidy %>% left_join(ab05) %>% left_join(pubmed_abs13) %>% 
+  left_join(alt_all %>% select(DI, AB), by=c("doi_clean"="DI")) -> abs_brids
 # Dimensions
 library(dimensionsR)
 token <- dsAuth(username = "darren.norris@unifap.br", password = "Dimensions@78")
@@ -498,8 +499,8 @@ out_cedat_dois %>%
   group_by(journal.name) %>% summarise(article_count = n()) %>% 
   arrange(desc(article_count))
 
-out_cedat_dois  %>% 
-  write.csv("data/cedat_cleandois.csv", row.names = FALSE) 
+#out_cedat_dois  %>% 
+#  write.csv("data/cedat_cleandois.csv", row.names = FALSE) 
   
 ```
 
@@ -517,5 +518,46 @@ abs_brids %>% filter(!is.na(doi_clean)) %>% select(ID, doi_clean) %>%
   rename("study.id"="ID") %>% mutate(source="cebirds")
 ) %>% select(source, study.id, doi_clean) %>% 
   write_rds("data/ce_dois.RDS")
+```
+
+Add Zhang Abstracts and export final.
+```{r}
+zhang_abs <- readRDS("data/zhang_abss.RDS")
+bind_rows(
+cedat_studies %>% 
+  left_join(abs_all %>% left_join(zhang_abs %>% select(study.id, AB) %>% distinct() %>%
+                        rename("ABzhang"="AB")) %>% 
+  mutate(ab_clean = str_to_upper(coalesce(AB, ABzhang, ab_pubmed, ab_text))) %>% 
+    filter(study.id %in% sids) %>% 
+              select(study.id, doi_clean, ab_clean)) %>%
+  mutate(doi_url = if_else(is.na(doi_clean), doi_clean, paste("https://doi.org/", doi_clean, sep=""))) %>% 
+  #filter(!is.na(ab_clean))  #507 abstracts
+select(study.id, publication.year,publication.title, journal.name, doi, url, doi_clean, doi_url, ab_clean, intervention_count),
+
+cebird %>% left_join(abs_brids %>% 
+  rename("study.id"="ID") %>% 
+  left_join(zhang_abs %>% select(study.id, AB) %>% distinct() %>%
+                        rename("ABzhang"="AB")) %>% 
+  mutate(ab_clean = str_to_upper(coalesce(AB, ABzhang, ab_pubmed, ab_text)), 
+         study.id = as.character(study.id)) %>% 
+    select(study.id, doi_clean, ab_clean), 
+  by= c("ID"="study.id")) %>% 
+  select(ID, year, title, journal, url, doi_clean, ab_clean) %>% 
+  mutate(doi_url = if_else(is.na(doi_clean), doi_clean, paste("https://doi.org/", doi_clean, sep=""))) %>% 
+  rename("study.id"="ID", 
+         "publication.year"="year", 
+         "publication.title"="title", 
+         "journal.name"="journal") %>% 
+  mutate(study.id = as.numeric(study.id), 
+         publication.year = as.numeric(publication.year), 
+         doi=NA, 
+         intervention_count=NA) %>% 
+  select(study.id, publication.year,publication.title, journal.name, doi, url, doi_clean, doi_url, ab_clean, intervention_count)
+)  -> out_doi_ab
+out_doi_ab %>% filter (!is.na(doi_clean)) %>% nrow() #806 DOIS
+out_doi_ab %>% filter (!is.na(ab_clean)) %>% nrow() # 518 Abstracts
+# Export  
+out_doi_ab %>% write.csv("data/cedat_cleandois.csv", row.names = FALSE) 
+
 ```
 
