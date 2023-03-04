@@ -1,5 +1,5 @@
 ---
-title: "01_development"
+title: "01_ce_tidy"
 author: "Darren Norris"
 date: "`r Sys.Date()`"
 output:
@@ -506,5 +506,16 @@ out_cedat_dois  %>%
 Save workspace.
 ```{r }
 save.image("~/Articles/2024_Norris_trytofail/hey-jude/data/ce_abstracts.RData")
+```
+
+Export to get Zhang search results
+```{r export-dois}
+bind_rows(
+abs_all %>% filter(!is.na(doi_clean)) %>% select(study.id, doi_clean) %>% 
+  mutate(source="cedat"),
+abs_brids %>% filter(!is.na(doi_clean)) %>% select(ID, doi_clean) %>% 
+  rename("study.id"="ID") %>% mutate(source="cebirds")
+) %>% select(source, study.id, doi_clean) %>% 
+  write_rds("data/ce_dois.RDS")
 ```
 
