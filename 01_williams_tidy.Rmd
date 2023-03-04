@@ -1,0 +1,113 @@
+---
+title: "01_williams_tidy"
+author: "Darren Norris"
+date: "`r Sys.Date()`"
+output:
+  bookdown::html_document2:
+    toc: yes
+    toc_float: yes
+    toc_depth: 3
+    fig_caption: yes
+  bookdown::pdf_document2:
+    toc: yes
+    toc_depth: 3
+    number_sections: yes
+    extra_dependencies: flafter
+    highlight: tango
+    includes:
+      in_header: preamble.txe
+always_allow_html: yes
+urlcolor: blue
+toc-title: Contents
+header-includes:
+  - \counterwithin{figure}{section}
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(
+  echo = TRUE, collapse = TRUE,
+  comment = "#>" 
+  )
+def_hook <- knit_hooks$get("output")
+knit_hooks$set(output = function(x, options) {
+  out <- def_hook(x, options)
+  return(paste("\\begin{framed}\\begin{verbatim}", x, "\\end{verbatim}\\end{framed}", collapse = "\n"))
+})
+```
+
+\newpage{}
+
+
+
+## Packages
+```{r load-packages, warning=FALSE, message=FALSE}
+# Data processing and presentation
+library(plyr) # plyr before tidyverse
+library(tidyverse)
+library(stringr)
+library(textclean)
+library(readxl)
+library(gridExtra)
+library(magrittr)
+library(rcrossref)
+
+```
+
+## Load data
+Williams 2020 
+The past and future role of conservation science in saving
+biodiversity https://doi.org/10.1111/conl.12720
+
+
+```{r load-data}
+# representative  sample of 959 articles published over the past 20 years 
+# in 20 conservation journals
+w4 <- "C:\\Users\\user\\Documents\\Articles\\2024_Norris_trytofail\\conl12720-sup-0004-suppmat.csv"
+wdat4 <- read.csv(w4 , as.is = TRUE, na.strings = c("NA", ""))
+# 3 case studies where where targeted research helped address real-world problems
+w2 <- "C:\\Users\\user\\Documents\\Articles\\2024_Norris_trytofail\\conl12720-sup-0002-suppmat.csv"
+wdat2 <- read.csv(w2, as.is = TRUE, na.strings = c("NA", ""))
+
+
+```
+
+Check how many articles.
+```{r check-articles}
+wdat2 %>% filter(year >=2011, !is.na(journal), 
+                 !is.na(Threat_category_numeric), !is.na(Response_category_numeric)) %>% nrow() #115
+wdat4 %>% filter(year >=2011) %>% nrow() #400
+wdat4 %>% filter(year >=2011) %>% 
+  group_by(journal) %>% summarise(count_studies = n()) # 20 from each journal
+
+```
+
+Join data to get dois. Export 515 articles identified as studies of threat or response
+```{r bind-data}
+bind_rows(
+wdat2 %>% filter(year >=2011, !is.na(journal), 
+                 !is.na(Threat_category_numeric), !is.na(Response_category_numeric)) %>% 
+  select(case_study, title, author, journal,year, 
+         Threat_category_numeric, Threat_category_description, Response_category_numeric, 
+         Response_category_description),
+wdat4 %>% filter(year >=2011) %>% 
+  select(title, author, journal,year, Threat_category_numeric, Threat_category_description, Response_category_numeric,  Response_category_description) %>% mutate(case_study = "sample")
+) -> wdat
+
+write.csv(wdat, "data/williams_titles.csv", row.names = FALSE)
+
+```
+
+Check data
+```{r check-data}
+
+wdat %>% 
+  mutate(flag_threat = if_else(Threat_category_numeric>0, 1, 0), 
+         flag_resp = if_else(Response_category_numeric>0, 1, 0), 
+         flag_int = if_else(Response_category_numeric==4, 1, 0)) %>% 
+  summarise(sum_threat = sum(flag_threat), 
+            sum_response = sum(flag_resp), 
+            sum_test_intervention = sum(flag_int),
+            )
+```
+

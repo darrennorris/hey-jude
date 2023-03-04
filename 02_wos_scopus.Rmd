@@ -1,0 +1,46 @@
+---
+  title: "02_scopus_wos"
+author: "Darren Norris"
+date: "`r Sys.Date()`"
+output:
+  bookdown::html_document2:
+  toc: yes
+toc_float: yes
+toc_depth: 3
+fig_caption: yes
+bookdown::pdf_document2:
+  toc: yes
+toc_depth: 3
+number_sections: yes
+extra_dependencies: flafter
+highlight: tango
+includes:
+  in_header: preamble.txe
+always_allow_html: yes
+urlcolor: blue
+toc-title: Contents
+header-includes:
+  - \counterwithin{figure}{section}
+---
+  
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(
+  echo = TRUE, collapse = TRUE,
+  comment = "#>" 
+)
+def_hook <- knit_hooks$get("output")
+knit_hooks$set(output = function(x, options) {
+  out <- def_hook(x, options)
+  return(paste("\\begin{framed}\\begin{verbatim}", x, "\\end{verbatim}\\end{framed}", collapse = "\n"))
+})
+```
+
+\newpage{}
+
+## Seaarch strategy
+1. Make sure WOS and Scopus results are same for same journal.
+2. Results for same journal include all those from Conservation Evidence and Williams 2020 
+The past and future role of conservation science in saving
+biodiversity https://doi.org/10.1111/conl.12720
+
