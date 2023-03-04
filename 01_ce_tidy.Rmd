@@ -38,6 +38,8 @@ knit_hooks$set(output = function(x, options) {
 
 \newpage{}
 
+In the end obtained 806 DOIS and 517 Abstracts for 1147 vertebrate studies from the Conservation Evidence database.
+
 ## Packages
 ```{r load-packages, warning=FALSE, message=FALSE}
 # Data processing and presentation
@@ -504,10 +506,6 @@ out_cedat_dois %>%
   
 ```
 
-Save workspace.
-```{r }
-save.image("~/Articles/2024_Norris_trytofail/hey-jude/data/ce_abstracts.RData")
-```
 
 Export to get Zhang search results
 ```{r export-dois}
@@ -571,3 +569,7 @@ out_doi_ab %>% write.csv("data/cedat_cleandois.csv", row.names = FALSE)
 
 ```
 
+Save workspace.
+```{r }
+save.image("~/Articles/2024_Norris_trytofail/hey-jude/data/ce_abstracts.RData")
+```
