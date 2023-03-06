@@ -39,8 +39,8 @@ knit_hooks$set(output = function(x, options) {
 \newpage{}
 
 In the end obtained 842 DOIS and 827 Abstracts for 1107 vertebrate articles from the Conservation Evidence database (total of 1145 studies including grey literature).
-There are 247 without doi that should be available via Scopus (842 + 247 =1089).
-With 56 needing manual download using title.
+There are 49 without doi that should be available via Scopus (842 + 49 = 891).
+
 ## Packages
 ```{r load-packages, warning=FALSE, message=FALSE}
 # Data processing and presentation
@@ -701,6 +701,25 @@ cedat_cleandois %>%
 #827 distinct Abstracts
 cedat_cleandois %>% filter(!is.na(ab_clean)) %>% select(ab_clean) %>% 
   distinct()
+
+# export dois to get
+cedat_cleandois %>% 
+  filter(!is.na(journal.name)) %>% 
+  mutate(flag_na_doi = if_else(is.na(doi_clean),1,0), 
+         flag_na_ab = if_else(is.na(doi_clean),1,0)) %>% 
+  group_by(journal.name) %>% 
+  summarise(tot_articles = length(unique(study.id)), 
+            na_doi = sum(flag_na_doi), 
+            na_ab = sum(flag_na_ab)) %>% 
+  arrange(desc(na_doi)) %>% 
+  ungroup() %>%
+  filter(na_doi > 0, na_doi < tot_articles) %>% 
+  pull(journal.name) -> missing_journals
+
+cedat_cleandois %>% 
+  filter(journal.name %in% missing_journals, is.na(doi_clean)) -> 
+  missing_dois
+  
 
 ```
 
