@@ -44,3 +44,40 @@ knit_hooks$set(output = function(x, options) {
 The past and future role of conservation science in saving
 biodiversity https://doi.org/10.1111/conl.12720
 
+## Packages
+```{r load-packages, warning=FALSE, message=FALSE}
+# Data processing and presentation
+library(plyr) # plyr before tidyverse
+library(tidyverse)
+library(stringr)
+library(textclean)
+library(readxl)
+library(gridExtra)
+library(magrittr)
+# bibliometric
+library(rscopus)
+library(bibliometrix)
+library(metagear)
+
+
+```
+
+Test scopus search 
+```{r get-pii}
+options("elsevier_api_key" = "0c6d56570f89faf767669d9ae8cdd873")
+have_api_key()
+print(rscopus::get_api_key(), reveal = TRUE)
+
+# Abstracts and doi from pii
+ x = abstract_retrieval("S1053811915002700", identifier = "pii",
+   verbose = FALSE)
+ # Abstract text
+ x$content$`abstracts-retrieval-response`$coredata$`dc:description`
+ # Doi
+ x$content$`abstracts-retrieval-response`$coredata$`prism:doi`
+ 
+# scopus_search fails. Bad Request (HTTP 400).
+ dsge_query <- rscopus::scopus_search("TITLE-ABS-KEY(DSGE) OR TITLE-ABS-KEY(\"Dynamic Stochastic General Equilibrium\")", view = "COMPLETE")
+
+```
+

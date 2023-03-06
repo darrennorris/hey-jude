@@ -1,0 +1,1 @@
+safe_scopus_ab <- purrr::safely(abstract_retrieval, otherwise = NA)

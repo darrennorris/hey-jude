@@ -51,6 +51,7 @@ library(readxl)
 library(gridExtra)
 library(magrittr)
 library(rcrossref)
+library(rscopus)
 
 ```
 
@@ -571,5 +572,95 @@ out_doi_ab %>% write.csv("data/cedat_cleandois.csv", row.names = FALSE)
 
 Save workspace.
 ```{r }
-save.image("~/Articles/2024_Norris_trytofail/hey-jude/data/ce_abstracts.RData")
+save.image("data/ce_abstracts.RData")
 ```
+
+Get missing Abstracts from Scopus
+```{r scopus-abstracts}
+options("elsevier_api_key" = "0c6d56570f89faf767669d9ae8cdd873")
+have_api_key()
+print(rscopus::get_api_key(), reveal = TRUE)
+
+# 136 missing from Elsevier publications
+out_doi_ab %>% 
+  mutate(sci_flag = ifelse(str_detect(url, "pii"), 1, 0)) %>%
+filter(sci_flag ==1, is.na(ab_clean)) # 136
+
+out_doi_ab %>% 
+  mutate(sci_flag = ifelse(str_detect(url, "pii"), 1, 0)) %>%
+filter(is.na(ab_clean) ,sci_flag ==1) %>% 
+  separate(url, into=c("a", "id_pii"), sep="pii/") %>% 
+  select(study.id, id_pii) -> els_toget
+
+# Abstracts and doi from pii
+ x = abstract_retrieval("S1439179112000151", identifier = "pii",
+   verbose = FALSE)
+ # Abstract text
+ x$content$`abstracts-retrieval-response`$coredata$`dc:description`
+ # Doi
+ x$content$`abstracts-retrieval-response`$coredata$`prism:doi`
+ 
+# helper functions
+source("R/safe_scopus_ab.R")
+source("R/get_scopus_ab.R")
+ab_s01 <- plyr::adply(els_toget[1:75, ], .margins = 1, .fun = get_scopus_ab)
+ab_s02 <- plyr::adply(els_toget[76:136, ], .margins = 1, .fun = get_scopus_ab)
+bind_rows(ab_s01, ab_s02) %>% 
+  mutate(ab_scopus = str_to_upper(str_squish(str_trim(ab_scopus)))) -> scopus_abs
+
+ out_doi_ab %>% left_join(scopus_abs) %>% 
+   mutate(doi_clean = coalesce(doi_clean, doi_scopus), 
+          ab_clean = coalesce(ab_clean, ab_scopus)) %>% 
+   mutate(doi_url = if_else(is.na(doi_clean), doi_clean, paste("https://doi.org/", doi_clean, sep=""))) %>% 
+   select(study.id, publication.year,publication.title, journal.name, doi, url, doi_clean, doi_url, ab_clean, intervention_count) -> out_doi_ab_scopus
+ # how many?
+out_doi_ab_scopus %>% filter(!is.na(doi_clean)) %>% nrow() #843 DOIS
+out_doi_ab_scopus %>% filter(!is.na(ab_clean)) %>% nrow() # 653 Abstracts
+
+# Export  
+out_doi_ab_scopus %>% write.csv("data/cedat_cleandois.csv", row.names = FALSE) 
+   
+```
+
+Now for dois missing Abstracts
+```{r scopus-dois}
+
+# 136 missing from Elsevier publications
+out_doi_ab_scopus %>% 
+filter(!is.na(doi_clean), is.na(ab_clean)) # 190
+
+out_doi_ab_scopus %>% 
+  filter(!is.na(doi_clean), is.na(ab_clean), !is.na(journal.name)) %>% 
+  select(study.id, doi_clean) -> scopus_toget
+
+source("R/get_scopus_abdoi.R")
+# error to sort see scopus_toget[50, ] scopus_toget[50, ]....
+ab_s03 <- plyr::adply(scopus_toget[1:25, ], .margins = 1, .fun = get_scopus_abdoi)
+ab_s04 <- plyr::adply(scopus_toget[26:35, ], .margins = 1, .fun = get_scopus_abdoi)
+ab_s05 <- plyr::adply(scopus_toget[36:44, ], .margins = 1, .fun = get_scopus_abdoi)
+ab_s06 <- plyr::adply(scopus_toget[46:48, ], .margins = 1, .fun = get_scopus_abdoi)
+ab_s06 <- plyr::adply(scopus_toget[49, ], .margins = 1, .fun = get_scopus_abdoi)
+ab_s07 <- plyr::adply(scopus_toget[51:75, ], .margins = 1, .fun = get_scopus_abdoi)
+ab_s08 <- plyr::adply(scopus_toget[76:80, ], .margins = 1, .fun = get_scopus_abdoi)
+ab_s09 <- plyr::adply(scopus_toget[81:91, ], .margins = 1, .fun = get_scopus_abdoi)
+ab_s10 <- plyr::adply(scopus_toget[93:150, ], .margins = 1, .fun = get_scopus_abdoi)
+ab_s11 <- plyr::adply(scopus_toget[151:190, ], .margins = 1, .fun = get_scopus_abdoi)
+
+bind_rows(ab_s03, ab_s04, ab_s05, ab_s06, ab_s07, ab_s08, 
+          ab_s09, ab_s10, ab_s11) %>% 
+  mutate(ab_scopus = str_to_upper(str_squish(str_trim(ab_scopus)))) -> scopus_abs02
+
+out_doi_ab_scopus %>% left_join(scopus_abs02) %>% 
+   mutate(doi_clean = coalesce(doi_clean, doi_scopus), 
+          ab_clean = coalesce(ab_clean, ab_scopus)) %>% 
+   mutate(doi_url = if_else(is.na(doi_clean), doi_clean, paste("https://doi.org/", doi_clean, sep=""))) %>% 
+   select(study.id, publication.year,publication.title, journal.name, doi, url, doi_clean, doi_url, ab_clean, intervention_count) -> out_doi_ab_scopus02
+ # how many?
+out_doi_ab_scopus02 %>% filter(!is.na(doi_clean)) %>% nrow() # 843 DOIS
+out_doi_ab_scopus02 %>% filter(!is.na(ab_clean)) %>% nrow() # 828 Abstracts
+
+# Export  
+out_doi_ab_scopus02 %>% write.csv("data/cedat_cleandois.csv", row.names = FALSE) 
+
+```
+
