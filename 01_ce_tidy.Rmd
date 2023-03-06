@@ -38,8 +38,9 @@ knit_hooks$set(output = function(x, options) {
 
 \newpage{}
 
-In the end obtained 843 DOIS and 828 Abstracts for 1147 vertebrate studies from the Conservation Evidence database.
-
+In the end obtained 842 DOIS and 827 Abstracts for 1107 vertebrate articles from the Conservation Evidence database (total of 1145 studies including grey literature).
+There are 247 without doi that should be available via Scopus (842 + 247 =1089).
+With 56 needing manual download using title.
 ## Packages
 ```{r load-packages, warning=FALSE, message=FALSE}
 # Data processing and presentation
@@ -558,15 +559,21 @@ cebird %>%
          publication.year = as.numeric(publication.year), 
          doi=NA, 
          intervention_count=NA) %>% 
-  select(study.id, publication.year,publication.title, journal.name, doi, url, doi_clean, doi_url, ab_clean, intervention_count) -> t2
+  select(study.id, publication.year,publication.title, journal.name, doi, url, doi_clean, doi_url, 
+ab_clean, intervention_count) -> t2
+
+#Make sure no duplicates
+t1 %>% pull(study.id) %>% unique() -> t1_studies
+t2 %>% 
+  filter(!study.id %in% t1_studies) -> t2
 # bind together
 bind_rows(t1, t2) %>% 
   mutate(ab_clean = str_squish(str_trim(str_to_upper(ab_clean)))) -> out_doi_ab
 # how many?
-out_doi_ab %>% filter(!is.na(doi_clean)) %>% nrow() #806 DOIS
-out_doi_ab %>% filter(!is.na(ab_clean)) %>% nrow() # 517 Abstracts
+out_doi_ab %>% filter(!is.na(doi_clean)) %>% nrow() #805 DOIS
+out_doi_ab %>% filter(!is.na(ab_clean)) %>% nrow() # 516 Abstracts
 # Export  
-out_doi_ab %>% write.csv("data/cedat_cleandois.csv", row.names = FALSE) 
+#out_doi_ab %>% write.csv("data/cedat_cleandois.csv", row.names = FALSE) 
 
 ```
 
@@ -656,11 +663,44 @@ out_doi_ab_scopus %>% left_join(scopus_abs02) %>%
    mutate(doi_url = if_else(is.na(doi_clean), doi_clean, paste("https://doi.org/", doi_clean, sep=""))) %>% 
    select(study.id, publication.year,publication.title, journal.name, doi, url, doi_clean, doi_url, ab_clean, intervention_count) -> out_doi_ab_scopus02
  # how many?
-out_doi_ab_scopus02 %>% filter(!is.na(doi_clean)) %>% nrow() # 843 DOIS
-out_doi_ab_scopus02 %>% filter(!is.na(ab_clean)) %>% nrow() # 828 Abstracts
+out_doi_ab_scopus02 %>% filter(!is.na(doi_clean)) %>% nrow() # 842 DOIS
+out_doi_ab_scopus02 %>% filter(!is.na(ab_clean)) %>% nrow() # 827 Abstracts
 
 # Export  
 out_doi_ab_scopus02 %>% write.csv("data/cedat_cleandois.csv", row.names = FALSE) 
+
+```
+
+double check results.
+```{r check-results}
+cedat_cleandois <- read.csv("data/cedat_cleandois.csv", as.is=TRUE) %>% 
+  filter(!is.na(study.id))
+# Export  
+cedat_cleandois %>% write.csv("data/cedat_cleandois.csv", row.names = FALSE) 
+cedat_cleandois %>%  filter(!is.na(journal.name)) %>% nrow() #1107
+cedat_cleandois %>% filter(!is.na(doi_clean)) %>% nrow() # 842 DOIS
+cedat_cleandois %>% filter(!is.na(ab_clean)) %>% nrow() # 827 Abstracts
+# 247 without doi that should be avaiable via scopus
+cedat_cleandois %>% 
+  filter(!is.na(journal.name)) %>% 
+  mutate(flag_na_doi = if_else(is.na(doi_clean),1,0), 
+         flag_na_ab = if_else(is.na(doi_clean),1,0)) %>% 
+  group_by(journal.name) %>% 
+  summarise(tot_articles = length(unique(study.id)), 
+            na_doi = sum(flag_na_doi), 
+            na_ab = sum(flag_na_ab)) %>% 
+  arrange(desc(na_doi)) %>% 
+  ungroup() %>%
+  filter(na_doi > 0, na_doi < tot_articles) %>% 
+  arrange(desc(tot_articles)) #%>% pull(tot_articles) %>% sum()
+
+cedat_cleandois %>% 
+  group_by(study.id) %>% summarise(count_studies =n()) %>%
+  arrange(desc(count_studies))
+
+#827 distinct Abstracts
+cedat_cleandois %>% filter(!is.na(ab_clean)) %>% select(ab_clean) %>% 
+  distinct()
 
 ```
 
