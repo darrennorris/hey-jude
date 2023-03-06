@@ -719,6 +719,7 @@ cedat_cleandois %>%
 cedat_cleandois %>% 
   filter(journal.name %in% missing_journals, is.na(doi_clean)) -> 
   missing_dois
+write.csv(missing_dois, "data/missing_dois.csv", row.names = FALSE)
   
 
 ```
