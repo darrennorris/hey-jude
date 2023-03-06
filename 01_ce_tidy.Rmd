@@ -38,7 +38,7 @@ knit_hooks$set(output = function(x, options) {
 
 \newpage{}
 
-In the end obtained 806 DOIS and 517 Abstracts for 1147 vertebrate studies from the Conservation Evidence database.
+In the end obtained 843 DOIS and 828 Abstracts for 1147 vertebrate studies from the Conservation Evidence database.
 
 ## Packages
 ```{r load-packages, warning=FALSE, message=FALSE}
