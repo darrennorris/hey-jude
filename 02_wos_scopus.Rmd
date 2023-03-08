@@ -62,6 +62,18 @@ library(metagear)
 
 ```
 
+Names of journals
+```{r journal-names}
+cs_NLC_11a21 <-read_excel("data/scopus_citescore/citescore_NLC_2011a2021.xlsx", 
+           na = c("", "NA", "N/A")) 
+jn_nlc <- unique(cs_NLC_11a21$SourceTitle)
+jn_multi <- c("Nature", "Science", "Scientific Reports", "PeerJ", "PLoS ONE")
+
+
+```
+
+
+
 Test scopus search 
 ```{r get-pii}
 options("elsevier_api_key" = "0c6d56570f89faf767669d9ae8cdd873")
@@ -78,6 +90,55 @@ print(rscopus::get_api_key(), reveal = TRUE)
  
 # scopus_search fails. Bad Request (HTTP 400).
  dsge_query <- rscopus::scopus_search("TITLE-ABS-KEY(DSGE) OR TITLE-ABS-KEY(\"Dynamic Stochastic General Equilibrium\")", view = "COMPLETE")
+ 
+
 
 ```
 
+
+Scopus search 8/3/2023 Bio Con with 287 articles.
+Will include several that are not focused on vertebrates as keywords are not author keywords so include incorrect terms. Will need to screen Abstracts.
+( SRCTITLE ( "Biological Conservation" ) AND TITLE-ABS-KEY ( "vertebrate" OR "vertebrates" OR fauna ) ) AND PUBYEAR > 2010 AND PUBYEAR < 2022 AND ( LIMIT-TO ( DOCTYPE , "ar" ) )
+
+```{r build-search}
+
+cn <-read_excel("data/common_names.xlsx")
+cstring <- paste(as.character(cn$common_name), collapse=" OR ")
+
+```
+
+
+Using only title and keywords = 92 with study of plants as has vertebrate in keywords.
+( SRCTITLE ( "Biological Conservation" ) AND ( TITLE ( "vertebrate" OR "vertebrates" OR fauna ) ) OR KEY ( "vertebrate" OR "vertebrates" OR fauna ) ) AND PUBYEAR > 2010 AND PUBYEAR < 2022 AND ( LIMIT-TO ( DOCTYPE , "ar" ) )
+
+Broaden gets 2024
+( SRCTITLE ( "Biological Conservation" ) AND TITLE-ABS-KEY ( wildlife* OR "vertebrate" OR "vertebrates" OR fauna* OR bushmeat OR herbivore* OR felid* OR canid* OR bird OR reptile OR snake OR anteaters or armadillo or sloth OR lizard OR fish OR amphibian OR ape OR monkey OR gibbon OR crocodile OR turtle OR frog OR toad or tortoise OR bat OR shark OR whale OR ray OR eel) ) AND PUBYEAR > 2010 AND PUBYEAR < 2022 AND ( LIMIT-TO ( DOCTYPE,"ar" ) )
+
+```{r check-scopus}
+# load bio con results
+bcfile <- "data/scopus_20230308/scopus_biocon02.bib"
+bcrefs <- bibliometrix::convert2df(file = bcfile, dbsource = "scopus", 
+                                     format = "bibtex") 
+# load CE refs
+cedat <-read_excel("data/studydat_fordarrenn_24_02_2023DN.xlsx", 
+           na = c("", "NA", "N/A"), sheet="study_dois_start2011")
+cedat %>% filter(journal.name=="Biological Conservation") %>% 
+  pull(doi_clean) -> dois_biocon # 69
+
+bcrefs %>% filter(DI %in% dois_biocon) # 53
+
+cedat %>% left_join(bcrefs, by=c("doi_clean"="DI")) %>% 
+  filter(journal.name =="Biological Conservation") %>% 
+  write.csv2("data/bcjoin.csv", row.names = FALSE)
+```
+
+
+
+Searching multidisciplinary returns 13549. Need to use ISSN to pull journals.
+( SRCTITLE ( "Nature" OR "Science" OR "Scientific Reports" OR "PeerJ" OR "PLoS ONE" ) AND TITLE-ABS-KEY ( "vertebrate" OR "vertebrates" OR fauna ) ) AND PUBYEAR > 2010 AND PUBYEAR < 2022 AND ( LIMIT-TO ( DOCTYPE , "ar" ) )
+
+With ISSN returns 5179 articles.
+( ISSN ( "0028-0836" OR "0036-8075" OR "2045-2322" OR "2167-8359" OR "1932-6203" ) AND TITLE-ABS-KEY ( "vertebrate" OR "vertebrates" OR fauna ) ) AND PUBYEAR > 2010 AND PUBYEAR < 2022 AND ( LIMIT-TO ( DOCTYPE , "ar" ) )
+
+With conservation or biodiversity returns 1130 articles.
+( ISSN("0028-0836" OR "0036-8075" OR "2045-2322" OR "2167-8359" OR "1932-6203") AND TITLE-ABS-KEY ( " vertebrate " OR " vertebrates " OR " fauna " ) AND TITLE-ABS-KEY ( " conservation" OR " biodiversity" ) ) AND PUBYEAR > 2010 AND PUBYEAR < 2022 AND ( LIMIT-TO ( DOCTYPE,"ar" ) )
