@@ -38,8 +38,8 @@ knit_hooks$set(output = function(x, options) {
 
 \newpage{}
 
-In the end obtained 842 DOIS and 827 Abstracts for 1107 vertebrate articles from the Conservation Evidence database (total of 1145 studies including grey literature).
-There are 49 without doi that should be available via Scopus (842 + 49 = 891).
+In the end obtained 842 DOIS and 821 Abstracts for 1107 vertebrate articles from the Conservation Evidence database (total of 1145 studies including grey literature).
+
 
 ## Packages
 ```{r load-packages, warning=FALSE, message=FALSE}
@@ -53,6 +53,7 @@ library(gridExtra)
 library(magrittr)
 library(rcrossref)
 library(rscopus)
+library(synthesisr)
 
 ```
 
@@ -90,25 +91,26 @@ cedat %>%
   summarise(study_count = length(unique(study.id))) %>% 
   arrange(desc(study_count))
 
+# Studies
 cedat %>% 
   filter(publication.year>=2011) %>%
   # 1094 studies
   group_by(study.id, publication.year, publication.title, 
            journal.name,doi, url) %>% 
   summarise(intervention_count = n()) %>% 
-  ungroup() -> cedat_studies
-cedat_studies %>% nrow() #1094
+  ungroup() -> cedat_scraped
+cedat_scraped %>% nrow() #1094
 # 35 not journals
-cedat_studies %>% 
+cedat_scraped %>% 
   filter(is.na(journal.name)) %>% nrow()
-# 819 dois are NA
-cedat_studies %>% 
+# 817 dois are NA
+cedat_scraped %>% 
   filter(is.na(doi)) %>% nrow()
-# 275 dois not NA
-cedat_studies %>% 
+# 277 dois not NA
+cedat_scraped %>% 
   filter(!is.na(doi)) %>% nrow()
-
-cedat_studies %>% 
+# Which journals have most articles
+cedat_scraped %>% 
   filter(!is.na(journal.name)) %>% 
   group_by(journal.name) %>% summarise(article_count = n()) %>% 
   arrange(desc(article_count))
@@ -119,18 +121,35 @@ cedat_studies %>%
 CE searched 3 March 2023. Filter birds and years 2011 - 2022 = 53 studies.
 https://www.conservationevidence.com/data/studies?pp=100&broad_id%5B%5D=2&country%5B%5D=&result_type=references&sort=publication_year#searchcontainer
 
-```{r}
-library(synthesisr)
+```{r add-birds}
 cebird <- read_refs(
   filename = "data/2023-03-03.ris",
   return_df = TRUE)
 
 ```
 
+Join scraped CE and birds. Total of 1145 studies.
+```{r join-studies}
+sid <- as.character(unique(cedat_scraped$study.id))
+bind_rows(cedat_scraped,
+cebird %>% 
+  # dont include duplicates
+  filter(!ID %in% sid) %>% 
+  rename("study.id"="ID", 
+         "publication.year"="year", 
+         "publication.title"="title", 
+         "journal.name"="journal") %>% 
+  mutate(study.id = as.numeric(study.id), 
+         publication.year = as.numeric(publication.year), 
+         doi=NA, 
+         intervention_count=NA) %>% 
+  select(study.id, publication.year,publication.title, journal.name, doi, url, intervention_count) 
+) -> cedat_studies
+```
 
 ## Get dois from CE data.
 ```{r get-dois}
-# Create new doi column to join with bibliometrics
+# Create new doi column to join with bibliometrics etc
 # clean out prefixes
 doi_prefix <- c("http://dx.doi.org/DOI:", "http://dx.doi.org/doi:", 
 "http://dx.doi.org/", "https://dx.doi.org/DOI:", "https://dx.doi.org/doi:", 
@@ -238,85 +257,27 @@ cedat_studies %>%
   mutate(doi_url = str_replace(doi_url, fixed("&partnerID=40&md5=69d21e627f92cd4b6f3c9837c45d6f2c"), "")) %>% 
   mutate(doi_url = str_replace(doi_url, fixed("&partnerID=40&md5=1af9d56b08f7404744b5e497fda4cd24"), "")) %>% 
   mutate(doi_url = str_replace(doi_url, fixed("&partnerID=40&md5=5c317266eef42c4e3e99d4ca26b2db29"), "")) -> cedat_study02
- 
-# birds
-cebird %>%
-  mutate(url = str_trim(url)) %>%
-  mutate(doi_url = str_replace(url, fixed(journal_doi_prefix[1]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[2]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[3]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[4]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[5]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[6]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[7]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[8]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[9]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[10]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[11]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[12]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[13]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[14]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[15]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[16]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[17]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[18]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[19]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[20]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[21]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[22]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[23]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[24]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[25]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[26]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[27]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[28]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[29]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[30]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed(journal_doi_prefix[31]), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, doi_prefix[1], "")) %>%
-  mutate(doi_url = str_replace(doi_url, doi_prefix[2], "")) %>% 
-  mutate(doi_url = str_replace(doi_url, doi_prefix[3], "")) %>% 
-  mutate(doi_url = str_replace(doi_url, doi_prefix[4], "")) %>% 
-  mutate(doi_url = str_replace(doi_url, doi_prefix[5], "")) %>% 
-  mutate(doi_url = str_replace(doi_url, doi_prefix[6], "")) %>% 
-  mutate(doi_url = str_replace(doi_url, doi_prefix[7], "")) %>% 
-  mutate(doi_url = str_replace(doi_url, doi_prefix[8], "")) %>% 
-  mutate(doi_url = str_replace(doi_url, doi_prefix[9], "")) %>% 
-  mutate(doi_url = str_replace(doi_url, "/abstract", "")) %>% 
-  mutate(doi_url = str_replace(doi_url, "/full", "")) %>% 
-  mutate(doi_url = str_replace(doi_url, "/pdf", "")) %>% 
-  mutate(doi_url = str_replace(doi_url, ".pdf", "")) %>% 
-  mutate(doi_url = str_replace(doi_url, "%2F", "/")) %>% 
-  mutate(doi_url = str_replace(doi_url, "%2f", "/")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed("&type=printable"), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed("&partnerID=40&md5=e7e28a9bcf2a253ad4cdbc1c807581c1"), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed("&partnerID=40&md5=69d21e627f92cd4b6f3c9837c45d6f2c"), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed("&partnerID=40&md5=1af9d56b08f7404744b5e497fda4cd24"), "")) %>% 
-  mutate(doi_url = str_replace(doi_url, fixed("&partnerID=40&md5=5c317266eef42c4e3e99d4ca26b2db29"), "")) -> cebird02
 
-# Manually include some missing dois
-write.csv(cebird02, "data/cebird.csv", row.names = FALSE)
-cebird03 <- read.csv("data/cebird.csv")
 
-cedat_study02 %>% 
-  mutate(url_flag = ifelse(str_detect(doi_url, "http"), 1, 0), 
-         wos_flag = ifelse(str_detect(doi_url, "ISI"), 1, 0)) %>% 
-  mutate(doi_url = ifelse(url_flag==1 | wos_flag==1, NA_character_, doi_url)) %>% 
-  mutate(doi_clean = coalesce(doi_ce, doi_url)) %>% 
-  filter(!is.na(doi_clean)) -> cedat_tidy
-sum(cedat_tidy$url_flag) # 0
-cedat_tidy %>% filter(!is.na(doi_clean)) %>% nrow() # 795
+```
 
-cebird03 %>% 
-  mutate(url_flag = ifelse(str_detect(doi_url, "http"), 1, 0), 
-         www_flag = ifelse(str_detect(doi_url, "www"), 1, 0), 
-         wos_flag = ifelse(str_detect(doi_url, "ISI"), 1, 0)) %>% 
-  mutate(doi_url = ifelse(url_flag==1 |www_flag==1 |wos_flag==1, NA_character_, doi_url)) %>% 
-  mutate(doi_clean = doi_url) %>% 
-  filter(!is.na(doi_clean)) -> cebird_tidy
+Get dois and Abstracts from pii and eid.
+```{r get-doi-scopus}
+# Helper functions
+source("R/safe_scopus_ab.R")
+source("R/get_scopus_ab.R")
+source("R/get_scopus_abeid.R")
 
-# Now science direct (36 articles)
-library(rscopus) # via UNIFAP
+# Set API and Inst keys
+s <- read_excel("data/something.xlsx")
+s %>% filter(name=="apikey") %>% pull(value) -> myapikey
+options("elsevier_api_key" = myapikey)
+have_api_key()
+print(rscopus::get_api_key(), reveal = TRUE)
+s %>% filter(name=="insttoken") %>% pull(value) -> myinsttoken
+insttoken <- myinsttoken
+insttoken <- inst_token_header(insttoken)
+
 cedat_study02 %>% 
   mutate(sci_flag = ifelse(str_detect(doi_url, "pii"), 1, 0)) %>%
 filter(sci_flag ==1) %>% pull(doi_url)
@@ -325,11 +286,151 @@ cedat_study02 %>%
   mutate(sci_flag = ifelse(str_detect(doi_url, "pii"), 1, 0)) %>%
 filter(is.na(doi_ce) ,sci_flag ==1) %>% 
   separate(doi_url, into=c("a", "id_pii"), sep="pii/") %>% 
-  select(study.id, id_pii) -> els_toget
+  select(study.id, id_pii) -> pii_toget # 37
+cedat_study02 %>% 
+  mutate(eid_flag = ifelse(str_detect(doi_url, "eid"), 1, 0), 
+         pii_flag = ifelse(str_detect(doi_url, "pii"), 1, 0)) %>%
+filter(is.na(doi_ce) ,eid_flag ==1, pii_flag==0) %>% 
+  separate(doi_url, into=c("a", "id_eid"), sep="eid=") %>% 
+  select(study.id, id_eid) %>% 
+  separate(id_eid, into=c("id_eid", NA), sep="&") -> eid_toget #9
+
+ab_pii01 <- plyr::adply(pii_toget, .margins = 1, .fun = get_scopus_ab)
+ab_eid01 <- plyr::adply(eid_toget, .margins = 1, .fun = get_scopus_abeid)
+bind_rows(
+ab_pii01 %>% 
+  select(study.id, doi_scopus, ab_scopus), 
+ab_eid01 %>% 
+  select(study.id, doi_scopus, ab_scopus)) -> scopus_abs
+nrow(scopus_abs) # 46
+length(unique(scopus_abs$doi_scopus)) # 46
+
 
 ```
 
-Now join with Abstracts from WOS search. 117 join at first attempt. 
+Update studies with dois and Abstracts.
+```{r update-studies}
+
+cedat_study02 %>% left_join(scopus_abs %>% 
+                              filter(!is.na(doi_scopus))) %>% 
+  mutate(doi_clean = doi_scopus, 
+    ab_clean = str_squish(str_trim(ab_scopus))) %>% 
+  select(!doi_scopus, !ab_scopus) %>%
+  mutate(url_flag = ifelse(str_detect(doi_url, "http"), 1, 0), 
+         wos_flag = ifelse(str_detect(doi_url, "ISI"), 1, 0), 
+         www_flag = ifelse(str_detect(doi_url, "www"), 1, 0)) %>% 
+  mutate(doi_url = ifelse(url_flag==1 | wos_flag==1 | www_flag==1, NA_character_, doi_url)) %>% 
+  mutate(doi_clean = coalesce(doi_clean, doi_ce, doi_url)) %>% 
+  separate(doi_clean, into=c("doi_clean", NA), sep=" ") %>% 
+  mutate(doi_clean = ifelse(doi_clean =="10.7325/7", NA, doi_clean)) %>% 
+  select(!c(ab_scopus, doi_scopus, url_flag, wos_flag, www_flag)) -> cedat_study03
+  
+cedat_study03 %>% 
+  filter(!is.na(doi_clean), is.na(ab_clean))  %>% 
+  filter(!doi_clean =="10.7325/7") %>% 
+  distinct() -> cedat_tidy
+
+cedat_tidy %>% nrow() #797
+length(unique(cedat_tidy$doi_clean)) # 797
+length(unique(cedat_tidy$study.id)) #797
+
+```
+
+Try rscopus for all dois missing Abstracts.
+```{r get-abs-scopus}
+
+# Helper functions
+source("R/safe_scopus_ab.R")
+source("R/get_scopus_abdoi.R")
+
+# Run. Approximately 15 minutes. tea time.
+scopus_ab01 <- plyr::ddply(cedat_tidy[1:200, ], .(study.id), .fun = get_scopus_abdoi)
+scopus_ab02 <- plyr::ddply(cedat_tidy[201:400, ], .(study.id), .fun = get_scopus_abdoi)
+scopus_ab03 <- plyr::ddply(cedat_tidy[401:600, ], .(study.id), .fun = get_scopus_abdoi)
+scopus_ab04 <- plyr::ddply(cedat_tidy[601:797, ], .(study.id), .fun = get_scopus_abdoi)
+
+bind_rows(scopus_ab01, scopus_ab02, scopus_ab03, scopus_ab04) -> scopus_abs02
+
+```
+
+Export results
+```{r export-results}
+# 821 Abstracts and 839 dois
+cedat_study03 %>% 
+  left_join(scopus_abs02) %>% 
+  mutate(doi_clean = str_trim(coalesce(doi_clean, doi_scopus)), 
+         ab_clean = str_trim(coalesce(ab_clean, ab_scopus))) %>% 
+  mutate(doi_url = if_else(is.na(doi_clean), doi_clean, paste("https://doi.org/", doi_clean, sep=""))) %>% 
+  select(study.id, publication.year,publication.title, journal.name, doi, url, doi_clean, doi_url, ab_clean, intervention_count) -> out_cedat_dois
+
+#821 distinct Abstracts
+out_cedat_dois %>% filter(!is.na(ab_clean)) %>% select(ab_clean) %>% 
+  distinct()
+# all dois and abstracts are unique
+length(na.omit(out_cedat_dois$ab_clean)) # 821
+length(unique(na.omit(out_cedat_dois$ab_clean))) # 821
+length(unique(na.omit(out_cedat_dois$doi_clean))) # 839
+length(na.omit(out_cedat_dois$doi_clean)) # 839
+
+out_cedat_dois  %>% 
+  write.csv("data/cedat_cleandois.csv", row.names = FALSE) 
+
+```
+
+Save workspace.
+```{r }
+save.image("data/ce_abstracts.RData")
+```
+
+Check results
+```{r}
+# 23 Journals to manually fill missing dois
+out_cedat_dois %>% 
+  filter(!is.na(journal.name)) %>% 
+  mutate(flag_na_doi = if_else(is.na(doi_clean),1,0), 
+         flag_na_ab = if_else(is.na(doi_clean),1,0)) %>% 
+  group_by(journal.name) %>% 
+  summarise(tot_articles = length(unique(study.id)), 
+            na_doi = sum(flag_na_doi), 
+            na_ab = sum(flag_na_ab)) %>% 
+  arrange(desc(na_doi)) %>% 
+  ungroup() %>%
+  filter(na_doi > 0, na_doi < tot_articles) %>% 
+  arrange(desc(tot_articles)) #%>% pull(tot_articles) %>% sum()
+# Unique study.id
+out_cedat_dois %>% 
+  group_by(study.id) %>% summarise(count_studies =n()) %>%
+  arrange(desc(count_studies))
+```
+
+Find which to update.
+```{r}
+# Find which to update/tidy more
+out_cedat_dois %>% 
+  filter(!is.na(journal.name)) %>%
+  mutate(flag_na_doi = if_else(is.na(doi_clean),1,0), 
+         flag_na_ab = if_else(is.na(doi_clean),1,0)) %>% 
+  group_by(journal.name) %>% 
+  summarise(tot_articles = length(unique(study.id)), 
+            na_doi = sum(flag_na_doi), 
+            na_ab = sum(flag_na_ab)) %>% 
+  arrange(desc(na_doi)) %>% 
+  filter(na_doi > 0, na_doi < tot_articles) -> cedat_tocheck
+#compare with original data
+out_cedat_dois %>% 
+  filter(!is.na(journal.name), !is.na(doi_clean)) %>% 
+  group_by(journal.name) %>% summarise(article_count = n()) %>% 
+  arrange(desc(article_count))
+
+```
+
+
+
+## Code development examples
+Code examples using WOS search results, pubmed, crossref and results from Zhang search.
+
+
+Now join with Abstracts from an earlier WOS search. 117 join at first attempt. 
 127 after more dois tidied.
 Test and develop searches......
 ```{r join-abstracts}
