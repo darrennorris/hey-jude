@@ -385,6 +385,9 @@ save.image("data/ce_abstracts.RData")
 Check results
 ```{r}
 # 23 Journals to manually fill missing dois
+# no doi and url is .pdf (ICES Marine = 7)
+# no doi and no url (Biological Conservation = 5)
+# invalid links e.g. wos / article (Oryx = 4)
 out_cedat_dois %>% 
   filter(!is.na(journal.name)) %>% 
   mutate(flag_na_doi = if_else(is.na(doi_clean),1,0), 
@@ -402,6 +405,31 @@ out_cedat_dois %>%
   group_by(study.id) %>% summarise(count_studies =n()) %>%
   arrange(desc(count_studies))
 ```
+
+Journals with most NA
+```{r}
+# Following journals do not have dois. 
+# No doi = no altimetric.......
+# Total of 153 studies to be manually included.
+# Conservation Evidence
+# Herpetological Conservation and Biology
+# Herpetological Review
+# Amphibian Ark Newsletter
+# The Herpetological Bulletin
+# Human Wildlife Interactions
+# Asian Herpetological Research
+
+out_cedat_dois %>% 
+  filter(!is.na(journal.name)) %>% 
+  mutate(flag_na_doi = if_else(is.na(doi_clean),1,0), 
+         flag_na_ab = if_else(is.na(doi_clean),1,0)) %>% 
+  group_by(journal.name) %>% 
+  summarise(tot_articles = length(unique(study.id)), 
+            na_doi = sum(flag_na_doi), 
+            na_ab = sum(flag_na_ab)) %>% 
+  arrange(desc(na_doi))
+```
+
 
 Find which to update.
 ```{r}
