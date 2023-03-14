@@ -38,8 +38,8 @@ knit_hooks$set(output = function(x, options) {
 
 \newpage{}
 
-In the end obtained 842 DOIS and 821 Abstracts for 1107 vertebrate articles from the Conservation Evidence database (total of 1145 studies including grey literature).
-
+In the end obtained 839 DOIS and 821 Abstracts for 1107 vertebrate articles from the Conservation Evidence database (total of 1145 studies including grey literature).
+Next step - search with rscopus using titles.
 
 ## Packages
 ```{r load-packages, warning=FALSE, message=FALSE}
