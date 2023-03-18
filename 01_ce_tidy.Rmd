@@ -38,7 +38,7 @@ knit_hooks$set(output = function(x, options) {
 
 \newpage{}
 
-In the end obtained 839 DOIS and 821 Abstracts for 1107 vertebrate articles from the Conservation Evidence database (total of 1145 studies including grey literature).
+In the end obtained 839 DOIS and 927 Abstracts for 1107 vertebrate articles from the Conservation Evidence database (total of 1145 studies including grey literature).
 Next step - search with rscopus using titles.
 
 ## Packages
@@ -452,6 +452,82 @@ out_cedat_dois %>%
 
 ```
 
+### Abstracts via titles
+```{r abstracts-from-titles}
+# helper functions
+source("R/safe_scopus_search.R")
+source("R/get_scopus_search.R")
+
+out_cedat_dois %>% 
+  filter(!is.na(journal.name), is.na(ab_clean)) %>%
+  #nrow() # 286 
+  select(study.id, publication.title, journal.name) %>% 
+  mutate(title_clean = str_squish(str_trim(textclean::replace_html(publication.title, symbol = FALSE))) 
+        ) -> cedat_titles
+# Cant track down what causes warning but this works. 
+scopus_search01 <- plyr::ddply(cedat_titles, .(study.id), .fun = get_scopus_search)
+
+
+# Below are cases to solve
+# 1) return multiple articles
+cedat_titles %>% filter(study.id==6352) -> testdf
+t1 <- safe_scopus_search(testdf[, 'title_clean'], view = "COMPLETE",
+                             verbose = FALSE, headers = insttoken)
+t1_df <- gen_entries_to_df(t1$result$entries)$df
+
+t1_df %>% 
+  mutate(title_flag = if_else(str_detect(`dc:title`, 
+                                         fixed("Hoolock gibbon conservation in India")),1,0)) %>% filter(title_flag==1) -> t2_df
+nrow(t2_df)
+
+# 2) search when titles have special characters/accents 
+# two examples 
+cedat_titles %>% filter(study.id==10374) %>% pull(title_clean) -> test_simple
+cedat_titles %>% filter(study.id==10385) %>% pull(title_clean) -> test_accent
+
+test_simple_query <- paste("TITLE(",test_simple,")", sep="")
+test_simple_query02 <- "TITLE(Over-exploitation and (illegal) trade of reptiles in Indonesia)"
+test_simple_query03 <- "TITLE(Over-exploitation and (illegal) trade of reptiles in Indonesia (Duméril & Bibron, 1844))" # bad request
+test_simple_query04 <- "TITLE(Over-exploitation and (illegal) trade of reptiles in Indonesia (Duméril) & Bibron, 1844)" # bad request
+
+# something in (Dumeril & Bibron, 1844) generates bad request.
+test_accent_query <- paste("TITLE(",test_accent,")", sep="") # 400 Bad request
+test_accent_query02 <- paste("TITLE(", "Captive husbandry and reproduction of the Madagascan tree boa Sanzinia madagascariensis (Duméril & Bibron, 1844)" ,")", sep="") # Bad request
+test_accent_query03 <- paste("TITLE(", "Captive husbandry and reproduction of the Madagascan tree boa Sanzinia madagascariensis (Duméril Bibron, 1844)" ,")", sep="") # Bad request
+test_accent_query04 <- paste("TITLE(", "Captive husbandry and reproduction of the Madagascan tree boa Sanzinia madagascariensis (Dumeril Bibron, 1844)" ,")", sep="") # Bad request
+test_accent_query05 <- paste("TITLE(", "Captive husbandry and reproduction of the Madagascan",")", sep="") # short version works
+test_accent_query06 <- paste("TITLE(", "Captive husbandry and reproduction of the Madagascan tree boa Sanzinia madagascariensis" ,")", sep="") # OK
+title_search <- rscopus::scopus_search(test_accent_query06, view = "COMPLETE",  headers = insttoken, verbose = FALSE)
+res_df <- gen_entries_to_df(title_search$entries)$df
+ab_out <- res_df$`dc:description`
+
+
+```
+
+Join Abstracts from titles
+```{r join-abstracts}
+# to check if we got the right article
+out_cedat_dois %>% left_join(scopus_search01) -> abs_check
+# Same. Differences due to html format codes etc
+abs_check %>% filter(!is.na(ab_scopus)) %>% 
+  mutate(flag_same = ifelse(publication.title==title_scopus,1,0)) %>% 
+  filter(flag_same==0) %>% 
+  select(publication.title,title_scopus)
+
+
+out_cedat_dois %>% left_join(scopus_search01) %>% 
+  mutate(ab_clean = coalesce(ab_clean, ab_scopus)) %>% 
+  select(study.id, publication.year,publication.title, journal.name, doi, url, doi_clean, doi_url, ab_clean, intervention_count) -> out_cedat_dois2
+
+# all dois and abstracts are unique
+length(na.omit(out_cedat_dois2$ab_clean)) # 927
+length(unique(na.omit(out_cedat_dois2$ab_clean))) # 927
+length(unique(na.omit(out_cedat_dois2$doi_clean))) # 839
+length(na.omit(out_cedat_dois2$doi_clean)) # 839
+
+out_cedat_dois2  %>% 
+  write.csv("data/cedat_cleandois.csv", row.names = FALSE) 
+```
 
 
 ## Code development examples

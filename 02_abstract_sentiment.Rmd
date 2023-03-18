@@ -1,0 +1,742 @@
+---
+title: "02_abstract_sentiment"
+author: "Darren Norris"
+date: "`r Sys.Date()`"
+output:
+  bookdown::html_document2:
+    toc: yes
+    toc_float: yes
+    toc_depth: 3
+    fig_caption: yes
+  bookdown::pdf_document2:
+    toc: yes
+    toc_depth: 3
+    number_sections: yes
+    extra_dependencies: flafter
+    highlight: tango
+    includes:
+      in_header: preamble.txe
+always_allow_html: yes
+urlcolor: blue
+toc-title: Contents
+header-includes:
+  - \counterwithin{figure}{section}
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(
+  echo = TRUE, collapse = TRUE,
+  comment = "#>" 
+  )
+def_hook <- knit_hooks$get("output")
+knit_hooks$set(output = function(x, options) {
+  out <- def_hook(x, options)
+  return(paste("\\begin{framed}\\begin{verbatim}", x, "\\end{verbatim}\\end{framed}", collapse = "\n"))
+})
+```
+
+\newpage{}
+
+# Load and prep data
+## Packages
+```{r load-packages, warning=FALSE, message=FALSE}
+# Data processing and presentation
+library(plyr) # plyr before tidyverse
+library(tidyverse)
+library(stringr)
+library(textclean)
+library(readxl)
+library(gridExtra)
+library(magrittr)
+# bibliometric
+library(bibliometrix)
+library(metagear)
+# Sentiment
+library(sentimentr)
+library(SentimentAnalysis)
+library(syuzhet)
+library(coreNLPsetup)
+library(stansent)
+
+```
+
+# Sentiment analysis
+
+Score Abstracts from conservation evidence.
+
+Load data.
+```{r load-data}
+# 927 Abstracts
+cedat_clean <- read.csv("data/cedat_cleandois.csv") %>% 
+  filter(!is.na(ab_clean))
+
+
+```
+
+
+
+
+```{r text-sentiment, eval=FALSE}
+
+cedat_clean %>% 
+  mutate(ab_02 = replace_html(ab_clean) %>%
+    dplyr::mutate(ab_split = get_sentences(ab_02))  %$%
+    sentiment_by(ab_02, list(study.id)) -> ceab_sentiment
+
+# Individual sentences. Start 17:02 17 March
+cedat_clean %>% 
+  mutate(ab_02 = replace_html(ab_clean) %>%
+    dplyr::mutate(ab_split = get_sentences(ab_02)) %>% 
+  unnest_longer(ab_split) -> ab_split
+
+ab_split %$%
+    sentiment_by(ab_split) -> ceab_sentances_sentiment
+
+sentiment_phrases %>% left_join(
+bind_cols(phrase_sentances %>% select(sentence, phrase_split), 
+          phrase_sentances_sentiment) %>% 
+  group_by(sentence) %>% 
+  summarise(rev_word_count = sum(word_count), 
+            rev_sentance_count = n(), 
+            rev_sentiment_min = round(min(ave_sentiment),4), 
+            rev_sentiment_max = round(max(ave_sentiment),4), 
+            rev_sentiment_med = round(median(ave_sentiment),3),
+            rev_sentiment_sd = round(sd(ave_sentiment),3)) 
+) -> sentiment_phrases_reviews
+
+saveRDS(sentiment_phrases_reviews, "data/sentiment_phrases_reviews.RDS")
+
+```
+
+Plot to check
+```{r plot-human, fig.cap="Sentiment scores of human annotated text . Values across four sources 2264 investor sentiments for financial news headlines (finance), and 2223 positive or negative sentiment, extracted from reviews of products (Amazon), films (IMDB), and restaurants (Yelp). "}
+
+
+sentiment_phrases_reviews <- readRDS("data/sentiment_phrases_reviews.RDS")
+# # 25th and 75th percentiles
+sentiment_phrases_reviews %>% 
+  filter(source=="finance", sentiment=="neutral") %>% 
+  pull(rev_sentiment_med) %>% Hmisc::smean.cl.boot(conf.int=.95) -> bootci
+lcl <- bootci[2]
+ucl <- bootci[3]
+
+#
+sentiment_phrases_reviews %>% 
+  ggplot(aes(x=sentiment, y = rev_sentiment_med)) +
+  #geom_point(aes(fill = factor(source))) + 
+  geom_violin(aes(fill = factor(source)), draw_quantiles=0.5) + 
+  #geom_hline(yintercept = lcl, linetype = "dashed") + 
+  #geom_hline(yintercept = ucl, linetype = "dashed") +
+  scale_fill_discrete("source") + 
+  labs(x="human annotated sentiment", 
+       y="sentiment score")
+
+```
+
+
+## Text sentiment
+
+Look at scores for simple phrases. Use example by Dr Joanna (Annie) Swafford (https://annieswafford.wordpress.com/2015/03/02/syuzhet/)
+
+```{r simple-sentiment, fig.width=7, fig.height=8}
+
+# added a few sentences to Annie Swafford example
+ase <- c( 
+  "What shall I do today?",
+  "Take a sad song and make it better.", 
+    "I am very pleased with it so far.",
+    "I haven't been sad in a long time.",
+    "I am extremely happy today.",
+    "It's a good day.",
+    "But suddenly I'm only a little bit happy.",
+    "Then I'm not happy at all.",
+    "In fact, I am now the least happy person on the planet.",
+    "There is no happiness left in me.",
+    "Wait, it's returned!",
+    "I don't feel so bad after all!",
+  "I think to myself what a wonderful world."
+)
+mysentiments <- c("neutral","positive", "positive", "neutral", "positive", "positive", "positive", "negative", "negative", "negative", "neutral", "neutral", "positive")
+myscores <- c(0, 0.75, 1, 0, 1, 1, 0.75, -0.5, -1, -1, 0, 0, 1) 
+myaid = paste("sent_", 
+                     c("01", "02", "03", "04", "05", "06", 
+                       "07", "08", "09", "10", "11", "12", "13"), sep="")
+dftest <- data.frame(sentence = ase, sentiment = mysentiments, score = myscores, 
+                     aid = myaid, sent_order = 1:13)
+s_rinker <- sentiment_by(dftest$sentence, 
+                         polarity_dt = lexicon::hash_sentiment_jockers_rinker, 
+                         question.weight = 0) %>% 
+  rename("ave_sent_rinker"="ave_sentiment")
+sort(unique(s_rinker$ave_sent_rinker))
+# Liu & HU (2004) 
+s_hu <- sentiment_by(dftest$sentence, 
+                     polarity_dt = lexicon::hash_sentiment_huliu, 
+                     question.weight = 0) %>% 
+  rename("ave_sent_huliu"="ave_sentiment")
+sort(unique(s_hu$ave_sent_huliu))
+s_jockers <- sentiment_by(dftest$sentence, 
+                     polarity_dt = lexicon::hash_sentiment_jockers, 
+                     question.weight = 0) %>% 
+  rename("ave_sent_jockers"="ave_sentiment")
+sort(unique(s_jockers$ave_sent_jockers))
+# SentimentAnalysis  
+# GI = Dictionary with opinionated words from the Harvard-IV dictionary as used in the General Inquirer software
+# LM = Loughran-McDonald Financial dictionary (Loughran and McDonald 2011)
+# QDAP = dictionary from the package qdapDictionaries
+sa <- SentimentAnalysis::analyzeSentiment(dftest$sentence) 
+
+# Stanford coreNLP
+out1 <- sentiment_stanford(dftest$sentence) %>% 
+  rename("ave_sent_stanford"="sentiment")
+#syuzhet
+sent_syuzhet <- get_sentiment(dftest$sentence, method="syuzhet")
+sent_bing <- get_sentiment(dftest$sentence, method="bing")
+sent_nrc <- get_sentiment(dftest$sentence, method="nrc")
+data.frame(score = sent_syuzhet, sent=dftest$sentiment)
+dfsyuzhet <- data.frame(syuzhet_syuzhet=sent_syuzhet, syuzhet_bing = sent_bing, 
+                        syuzhet_nrc=sent_nrc)
+class(dfsyuzhet[, 'syuzhet_syuzhet'])
+dfsyuzhet %>% select(syuzhet_syuzhet)
+#
+bind_cols(dftest, s_hu[, c('word_count', 'ave_sent_huliu')], 
+          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
+          out1[, 'ave_sent_stanford'], dfsyuzhet,
+          sa %>% select(WordCount, SentimentGI, SentimentLM, SentimentQDAP) 
+) %>% 
+  select(aid, sentence, sentiment, word_count, ave_sent_huliu, ave_sent_rinker, ave_sent_jockers,
+         syuzhet_syuzhet, syuzhet_bing, syuzhet_nrc, ave_sent_stanford, SentimentGI, SentimentLM, SentimentQDAP) %>% 
+  pivot_longer(cols=c(ave_sent_huliu, ave_sent_rinker, ave_sent_jockers, ave_sent_stanford, syuzhet_syuzhet,syuzhet_bing,syuzhet_nrc, SentimentGI, SentimentLM, SentimentQDAP)) %>% 
+  ggplot(aes(x=factor(sentiment), y = value, fill = factor(name))) + 
+    geom_violin(draw_quantiles=0.5) + 
+  geom_point(position=position_jitterdodge()) +
+  geom_hline(yintercept = 0) +
+  scale_fill_discrete("lexicon") + 
+  labs(x="human annotated sentiment", 
+       y="sentiment score") + 
+  coord_flip()
+           
+```
+Ensemble approach with four "best" dictionaries.
+
+```{r sentiment-ensemble}
+
+bind_cols(dftest, s_hu[, c('word_count', 'ave_sent_huliu')], 
+          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
+          out1[, 'ave_sent_stanford']) %>%
+  select(aid, sentence, sentiment, word_count, 
+         ave_sent_huliu, 
+         ave_sent_rinker, 
+         ave_sent_jockers,
+         ave_sent_stanford) %>% 
+  pivot_longer(cols=c(ave_sent_rinker, ave_sent_huliu, ave_sent_jockers, ave_sent_stanford)) %>% 
+  #group_by(aid, sentiment, sentence) %>% summarise(med_sent = median(value), 
+   #                                           min_sent = min(value), 
+   #                                           max_sent = max(value)) %>%
+  ggplot(aes(x=factor(sentiment), y = value)) + 
+    geom_violin(aes(fill = factor(name)), draw_quantiles = 0.5) + 
+  #geom_point(size = 2, aes(col = factor(aid), shape=factor(name)), 
+  #           position=position_dodge(width=0.3)) +
+  #geom_errorbar(aes(ymin = min_sent, ymax = max_sent, 
+  #                  col = factor(aid)), 
+   #             position=position_dodge(width=0.2))
+  #scale_fill_discrete("lexicon") + 
+  labs(x="human annotated sentiment", 
+       y="sentiment score")
+
+```
+
+Use 4 best sentiment lexicons to model sentiment directions. Where confidence interval overlaps zero then is neutral (?). Sentence nine is most problematic, with only one lexicon (Stanford) scoring this negative sentence correctly (sentence: "In fact, I am now the least happy person on the planet."). But Stanford also scores positive sentences as negative in one case.
+```{r sentiment-direction-ensemble, fig.width=7, fig.height=6, fig.cap="Comparison of human and automated sentiment scores. Annotaded scores by Darren (A) and four most consistent lexicon diciionaires (B). Coloured points and lines indicate different lexicon scores (points are dodged horizontally to avoid overlapping). Dashed line is prediciton from GAM model with grey shading showing 95% CI."}
+
+ggplot(dftest, aes(x=sent_order, y=score)) + 
+  geom_hline(yintercept=0) +
+  geom_point() + 
+  geom_line() + 
+  scale_x_continuous(breaks = c(1,3,5,7,9,11,13)) + 
+  labs(title = "(A) Human", 
+  x="sentence order", 
+       y="human annotated sentiment score") -> fig_sent_h
+
+bind_cols(dftest, s_hu[, c('word_count', 'ave_sent_huliu')], 
+          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
+          out1[, 'ave_sent_stanford']) %>% 
+  select(aid, sent_order, sentence, score, sentiment, word_count, 
+         ave_sent_huliu, 
+         ave_sent_rinker, 
+         ave_sent_jockers,
+         ave_sent_stanford) %>% 
+  pivot_longer(cols=c(ave_sent_rinker, ave_sent_huliu, ave_sent_jockers, ave_sent_stanford)) %>% 
+  ggplot(aes(x = sent_order, y = value)) + 
+  geom_hline(yintercept=0) +
+  geom_jitter(aes(colour = name)) + 
+  geom_line(aes(color = as.factor(name))) +
+  stat_smooth(method = "gam",formula = y ~ s(x, k = 13),
+              linetype="dashed") + 
+  scale_x_continuous(breaks = c(1,3,5,7,9,11,13)) +
+  labs(title="(B) Sentiment lexicon", 
+       x="sentence order", 
+       y="sentiment score") + 
+  theme(legend.position = c(0.7, 0.85)) + 
+  guides(color = guide_legend(nrow = 2)) -> fig_sent_lex
+
+grid.arrange(fig_sent_h, fig_sent_lex, nrow=2)
+```
+
+
+
+
+## Abstract sentiment.
+
+Repeat ensemble approach for Abstracts. Test with one optimistic, one neutral and one negative.
+```{r abstract-test-data}
+
+# Test on an optimistic example
+ab_positive <- data.frame(doi= "10.1016/j.biocon.2019.02.022", 
+                          title = "Prospects for freshwater turtle population recovery are catalyzed by pan-Amazonian community-based management", 
+                          sentence = c("Sustainable use as a mechanism for the conservation and recovery of exploited wildlife populations remains intensely debated, including for freshwater turtles, a diverse and imperiled group of aquatic reptiles that are an important food source for many residents of tropical regions.", 
+                                       "Here we evaluated the geographical extent of recovery options for a heavily exploited tropical freshwater turtle fauna across 8.86 M km2 of South American river catchments under scenarios of Business-as-Usual (BAU), Protection (Pr) and Community-Based-Management (CBM).", 
+                                       "For the widespread indicator species, Podocnemis unifilis, demographic analysis showed that populations subject to moderate levels of female harvest (≤10%) can recover over broad areas if concurrent headstarting of hatchlings is practiced more widely.", 
+                                       "With regional strengthening of the protected area network unlikely, CBM developed with harvest frameworks derived from demographic rates appropriate to tropical species could catalyze a rapid continental scale recovery of Amazonian freshwater turtles within a few decades."), 
+                          sentiment = c("neutral", "neutral", "positive", "positive"), 
+                          score = c(0,0,0.5,0.75), 
+                          aid = c("01","02","03","04"), 
+                          sent_order = 1:4 
+)
+                          
+ab_negative <- data.frame(doi = "10.1126/science.aay5733", title = "Tropical snake diversity collapses after widespread amphibian loss", 
+                          sentence = c(
+                            "Biodiversity is declining at unprecedented rates worldwide.",
+                          "Yet cascading effects of biodiversity loss on other taxa are largely unknown because baseline data are often unavailable.", 
+                          "We document the collapse of a Neotropical snake community after the invasive fungal pathogen Batrachochytrium dendrobatidis caused a chytridiomycosis epizootic leading to the catastrophic loss of amphibians, a food source for snakes.", 
+                          "After mass mortality of amphibians, the snake community contained fewer species and was more homogeneous across the study site, with several species in poorer body condition, despite no other systematic changes in the environment.", 
+                          "The demise of the snake community after amphibian loss demonstrates the repercussive and often unnoticed consequences of the biodiversity crisis and calls attention to the invisible declines of rare and data-deficient species."), 
+                          sentiment = c("negative", "negative", "negative", "negative", "negative"), 
+                          score = c(-0.5, -0.25, -0.75, -0.75, -0.25),
+                          aid = c("01","02","03","04", "05"), sent_order = 1:5)                          
+bind_rows(ab_positive %>% mutate(ab_type = "positive"), 
+          ab_negative %>% mutate(ab_type = "negative")) -> ab
+
+
+
+```
+
+Now get sentiments.
+```{r abstract_test_examples}
+s_rinker <- sentiment_by(ab$sentence, 
+                         polarity_dt = lexicon::hash_sentiment_jockers_rinker, 
+                         question.weight = 0) %>% 
+  rename("ave_sent_rinker"="ave_sentiment")
+sort(unique(s_rinker$ave_sent_rinker))
+# Liu & HU (2004) 
+s_hu <- sentiment_by(ab$sentence, 
+                     polarity_dt = lexicon::hash_sentiment_huliu, 
+                     question.weight = 0) %>% 
+  rename("ave_sent_huliu"="ave_sentiment")
+sort(unique(s_hu$ave_sent_huliu))
+s_jockers <- sentiment_by(ab$sentence, 
+                     polarity_dt = lexicon::hash_sentiment_jockers, 
+                     question.weight = 0) %>% 
+  rename("ave_sent_jockers"="ave_sentiment")
+sort(unique(s_jockers$ave_sent_jockers))
+# SentimentAnalysis  
+# GI = Dictionary with opinionated words from the Harvard-IV dictionary as used in the General Inquirer software
+# LM = Loughran-McDonald Financial dictionary (Loughran and McDonald 2011)
+# QDAP = dictionary from the package qdapDictionaries
+sa <- SentimentAnalysis::analyzeSentiment(ab$sentence) 
+
+# Stanford coreNLP
+out1 <- sentiment_stanford(ab$sentence) %>% 
+  rename("ave_sent_stanford"="sentiment")
+#syuzhet
+sent_syuzhet <- get_sentiment(ab$sentence, method="syuzhet")
+sent_bing <- get_sentiment(ab$sentence, method="bing")
+sent_nrc <- get_sentiment(ab$sentence, method="nrc")
+
+dfsyuzhet <- data.frame(syuzhet_syuzhet=sent_syuzhet, syuzhet_bing = sent_bing, 
+                        syuzhet_nrc=sent_nrc)
+
+```
+
+Plot test results. Dont use syuzhet for now (bing, nrc) as they are on different scales.
+```{r plot-abstract-test}
+
+bind_cols(ab, s_hu[, c('word_count', 'ave_sent_huliu')], 
+          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
+          out1[, 'ave_sent_stanford'], dfsyuzhet,
+          sa %>% select(WordCount, SentimentGI, SentimentLM, SentimentQDAP) 
+) %>% 
+  select(aid, sentence, sentiment, word_count, ave_sent_huliu, ave_sent_rinker, ave_sent_jockers, ave_sent_stanford,
+         #syuzhet_syuzhet, syuzhet_bing, syuzhet_nrc, 
+         SentimentGI, SentimentLM, SentimentQDAP) %>% 
+  pivot_longer(cols=c(ave_sent_huliu, ave_sent_rinker, ave_sent_jockers, ave_sent_stanford, 
+                      #syuzhet_syuzhet,syuzhet_bing,syuzhet_nrc, 
+                      SentimentGI, SentimentLM, SentimentQDAP)) %>% 
+  ggplot(aes(x=factor(sentiment), y = value, fill = factor(name))) + 
+    geom_boxplot() + 
+  geom_point(position=position_jitterdodge()) +
+  geom_hline(yintercept = 0) +
+  scale_fill_discrete("lexicon") + 
+  labs(x="human annotated sentiment", 
+       y="sentiment score") + 
+  coord_flip()
+
+```
+
+With 4 best. Predictions stay on correct direction. May not necessarily follow sentiments, but sentiment scores come from N = 1!!
+
+```{r plot-abstract-test-best}
+
+ggplot(ab, aes(x=sent_order, y=score)) + 
+  geom_hline(yintercept=0) +
+  geom_point() + 
+  geom_line() + 
+  scale_x_continuous(breaks = c(1,3,5,7,9,11,13)) + 
+  facet_wrap(~ab_type, nrow=1) +
+  labs(title = "(A) Human", 
+  x="sentence order", 
+       y="human annotated sentiment score") -> fig_sent_h
+
+bind_cols(ab, s_hu[, c('word_count', 'ave_sent_huliu')], 
+          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
+          out1[, 'ave_sent_stanford']) %>% 
+  select(ab_type, aid, sent_order, sentence, score, sentiment, word_count, 
+         ave_sent_huliu, 
+         ave_sent_rinker, 
+         ave_sent_jockers,
+         ave_sent_stanford) %>% 
+  pivot_longer(cols=c(ave_sent_rinker, ave_sent_huliu, ave_sent_jockers, ave_sent_stanford)) %>% 
+  ggplot(aes(x = sent_order, y = value)) + 
+  geom_hline(yintercept=0) +
+  geom_jitter(aes(colour = name)) + 
+  geom_line(aes(color = as.factor(name))) +
+  stat_smooth(method = "gam",formula = y ~ s(x, k = 4),
+              linetype="dashed") + 
+  scale_x_continuous(breaks = c(1,3,5,7,9,11,13)) + 
+  facet_wrap(~ab_type, nrow=1) +
+  labs(title="(B) Sentiment lexicon", 
+       x="sentence order", 
+       y="sentiment score") + 
+  theme(legend.position="none") -> fig_sent_lex
+
+grid.arrange(fig_sent_h, fig_sent_lex, nrow=2)
+
+
+```
+Number of words per sentence needs to be considered?
+```{r abstract-word-number}
+
+bind_cols(ab, s_hu[, c('word_count', 'ave_sent_huliu')], 
+          s_rinker[, 'ave_sent_rinker'], s_jockers[, 'ave_sent_jockers'],
+          out1[, 'ave_sent_stanford']) %>% 
+  select(ab_type, aid, sent_order, sentence, score, sentiment, word_count, 
+         ave_sent_huliu, 
+         ave_sent_rinker, 
+         ave_sent_jockers,
+         ave_sent_stanford) %>% 
+  pivot_longer(cols=c(ave_sent_rinker, ave_sent_huliu, ave_sent_jockers, ave_sent_stanford)) %>% 
+  ggplot(aes(x = word_count, y = value)) + 
+  geom_hline(yintercept=0) +
+  geom_jitter(aes(colour = name)) + 
+  geom_line(aes(color = as.factor(name))) +
+  stat_smooth(method = "lm",
+              linetype="dashed") + 
+  facet_wrap(~ab_type, nrow=1) +
+  labs(x="sentence word count", 
+       y="sentiment score") + 
+  theme(legend.position="none")
+
+```
+
+
+
+Test on full data.
+
+```{r test-sentiment, eval=FALSE}
+alt_all <- readRDS("data/alt_all.rds")
+
+# Abstracts
+alt_all[1:6, ] %>% 
+  filter(!is.na(AB), !is.na(DI)) %>%
+    get_sentences() %$%
+    sentiment_by(AB, list(DI))
+
+#171298 sentances
+alt_all %>% 
+  filter(!is.na(AB), !is.na(DI)) %>% 
+  select(DI, AB) %>%
+    dplyr::mutate(ab_split = get_sentences(AB)) %>% 
+  unnest_longer(ab_split) -> abstract_sentances
+
+saveRDS(abstract_sentances, "data/abstract_sentances.rds")
+abstract_sentances %$%
+    sentiment_by(ab_split) -> abstract_sentances_sentiment
+bind_cols(abstract_sentances, abstract_sentances_sentiment) -> ab_sent_senti
+ab_sent_senti %>% 
+  group_by(DI, AB) %>% 
+  summarise(ab_word_count = sum(word_count), 
+            ab_sentance_count = n(), 
+            ab_sentiment_min = round(min(ave_sentiment),4), 
+            ab_sentiment_max = round(max(ave_sentiment),4), 
+            ab_sentiment_med = round(median(ave_sentiment),3),
+            ab_sentiment_sd = round(sd(ave_sentiment),3)) -> ab_sent_senti
+saveRDS(ab_sent_senti, "data/ab_sent_senti.rds")
+
+# Titles
+#recommended process flow, but uncombine adds duplicate rows dont use.
+#alt_all[1:6, ] %>%
+#    get_sentences() %$%
+#    sentiment_by(TI, list(AU, PY, DI)) -> title_sent
+#uncombine(title_sent)
+
+alt_all %>% 
+  filter(!is.na(TI), !is.na(DI)) %>% 
+  select(DI, TI) %>%
+    dplyr::mutate(title_split = get_sentences(TI)) %>% 
+  unnest_longer(title_split) -> title_sentances
+
+title_sentances %$%
+    sentiment_by(title_split) -> title_sentances_sentiment
+
+bind_cols(title_sentances, title_sentances_sentiment) -> title_sent_senti
+title_sent_senti %>% 
+  group_by(DI, TI) %>% 
+  summarise(ti_word_count = sum(word_count), 
+            ti_sentance_count = n(), 
+            ti_sentiment_min = round(min(ave_sentiment),4), 
+            ti_sentiment_max = round(max(ave_sentiment),4), 
+            ti_sentiment_med = round(median(ave_sentiment),3),
+            ti_sentiment_sd = round(sd(ave_sentiment),3)) -> ti_sent_senti
+saveRDS(title_sent_senti, "data/title_sent_senti.rds")
+
+# join sentiment to articles
+alt_all %>% 
+  left_join(ab_sent_senti) %>% 
+  left_join(ti_sent_senti) -> all_alti_senti
+
+# Export for future use
+saveRDS(all_alti_senti, "data/all_alti_senti.RDS")
+write.csv(all_alti_senti, "data/all_alti_senti.csv")
+rm("abstract_sentances")
+rm("abstract_sentances_sentiment")
+rm("ab_sent_senti")
+rm("title_sentances")
+rm("title_sentances_sentiment")
+rm(ti_sent_senti)
+rm(alt_all)
+rm(alt_na)
+
+```
+
+
+Summaries of sentiment.
+```{r abstract-sentiment-summary}
+# check for differences in counts of journal names. Same journal changes name etc?
+# Need to standardize journal names in WOS search results.
+all_alti_senti <- readRDS("data/all_alti_senti.RDS")
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), PY %in% study_years) %>% pull(SO) %>% 
+  unique() %>% length() -> journal_count_ab # 81
+jcr_11a21 %>% 
+  filter(ayear %in% study_years) %>% pull(Journal_name) %>% 
+  unique() %>% length() -> journal_count_jcr # 73
+jcr_11a21 %>% 
+  filter(ayear %in% study_years) %>% pull(ISSN) %>% 
+  unique() %>% length() -> journal_count_issn # 69
+
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), PY %in% study_years) %>% pull(DI) %>% 
+  unique() %>% length() #14330
+
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), PY %in% study_years) %>% pull(DI) %>% 
+  unique() %>% length() -> article_count_doi#14330
+
+all_alti_senti %>%
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric),PY %in% study_years) %>% 
+  pull(DI) %>% 
+  unique() %>% length() # 10395
+all_alti_senti %>%
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), 
+         !is.na(TC),PY %in% study_years) %>% 
+  pull(DI) %>% 
+  unique() %>% length() # 10395
+```
+Correlation.
+```{r sentiment-correlation}
+df1a1 <- data.frame(ab_sentiment_med = seq(-2,2), ti_sentiment_med = seq(-2,2))
+
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years) %>%
+  ggplot(aes(x=ab_sentiment_med, y=ti_sentiment_med)) +
+  geom_point() + 
+  geom_line(data= df1a1, aes(x=ab_sentiment_med, y=ti_sentiment_med)) +
+  stat_smooth(method="lm", linetype="dashed") + 
+  coord_fixed(xlim=c(-1,1), ylim=c(-1.6, 1.4)) +
+  labs(x="Abstract sentiment", y="Title sentiment")
+
+```
+
+
+Plot to see/explore. Temporal trrends in abstract and title sentiment.
+```{r plot-sentiment-year, fig.height=5, fig.width=7}
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years) %>% 
+    select(PY, altmetric, TC, ab_sentiment_med, ti_sentiment_med) %>% 
+  mutate(year = factor(PY)) %>% 
+  pivot_longer(cols = c(ab_sentiment_med, ti_sentiment_med)) %>% 
+  mutate(name = if_else(name=="ab_sentiment_med", "abstract sentiment", 
+                        "title sentiment")) %>%
+  ggplot(aes(x=factor(PY), y=value)) + 
+  geom_point() + 
+  geom_violin(draw_quantiles = 0.5) + 
+  coord_flip() + 
+  facet_wrap(~name) +
+  labs(x="year", y="sentiment")
+```
+
+Relationship between article impact and Abstract sentiment.
+
+```{r plot-article-impact-sentiment, fig.height=6, fig.width=5}
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years) %>% 
+  select(PY, altmetric, TC, ab_sentiment_med) %>% 
+  mutate(year = factor(PY)) %>% 
+  pivot_longer(cols = c(altmetric, TC)) %>% 
+  mutate(name = if_else(name=="TC", "times cited", name)) %>%
+  ggplot(aes(x=value, y = ab_sentiment_med)) + 
+  geom_point() + 
+  geom_smooth(method = "gam")+
+  facet_grid(year~name, scales = "free_x") + 
+  labs(x="article impact", y="Abstract sentiment")
+```
+
+
+Relationship between article impact and title sentiment.
+
+```{r plot-title-impact-sentiment, fig.height=6, fig.width=5}
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years) %>% 
+  select(PY, altmetric, TC, ti_sentiment_med) %>% 
+  mutate(year = factor(PY)) %>% 
+  pivot_longer(cols = c(altmetric, TC)) %>% 
+  mutate(name = if_else(name=="TC", "times cited", name)) %>%
+  ggplot(aes(x=value, y = ti_sentiment_med)) + 
+  geom_point() + 
+  geom_smooth(method = "gam")+
+  facet_grid(year~name, scales = "free_x") + 
+  labs(x="article impact", y="title sentiment")
+```
+
+Trim extreme values (Zuur 2010  https://doi.org/10.1111/j.2041-210X.2009.00001.x)? Do article impact indicators and sentiment values have 
+extreme values?
+
+Citations per year and title sentiment.
+```{r plot-citations-per-year, fig.width=7, fig.height=12}
+# citations per year
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years, 
+         !DI=="10.1111/j.1472-4642.2010.00725.x") %>% 
+  mutate(cite_per_year = TC/(2022 - PY)) %>%
+  arrange(cite_per_year) %>% 
+  mutate(cite_order = row_number()) %>% 
+  ggplot(aes(x=cite_per_year, y=cite_order)) + 
+  geom_jitter(width=3, aes(col=ti_sentiment_med), alpha=0.3, size=2) + 
+  scale_colour_gradient2("title\nsentiment", 
+                         low = "red", mid = "grey80", high = "green") +
+  facet_wrap(~PY, scales = "free", ncol = 2) + 
+  labs(title = "(A)", y="order of times cited per year", 
+       x = "times cited per year") + 
+  theme_bw()
+```
+
+Citations per year and abstract sentiment.
+```{r plot-citations-per-year-abstract, fig.width=7, fig.height=12}
+# citations per year
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years, 
+         !DI=="10.1111/j.1472-4642.2010.00725.x") %>% 
+  mutate(cite_per_year = TC/(2022 - PY)) %>%
+  arrange(cite_per_year) %>% 
+  mutate(cite_order = row_number()) %>% 
+  ggplot(aes(x=cite_per_year, y=cite_order)) + 
+  geom_jitter(width=3, aes(col=ab_sentiment_med), alpha=0.3, size=2) + 
+  scale_colour_gradient2("abstract\nsentiment", 
+                         low = "red", mid = "grey80", high = "green") +
+  facet_wrap(~PY, scales = "free", ncol = 2) + 
+  labs(title = "(A)", y="order of times cited per year", 
+       x = "times cited per year") + 
+  theme_bw()
+```
+
+
+Explore data with Cleveland plots.
+
+
+```{r cleveland-plot-citation, fig.width=8, fig.height=12}
+# Okabe-Ito colour blind safe
+okabe <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years, 
+         !DI=="10.1111/j.1472-4642.2010.00725.x") %>% 
+  mutate(cite_per_year = TC/(2022 - PY)) %>% 
+#  pull(cite_per_year) %>% summary() 
+#   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#  0.000   1.500   3.000   4.351   5.444 158.000 
+  arrange(cite_per_year) %>%
+  mutate(cite_rank = rank(cite_per_year), 
+         cite_order = row_number(),
+         flag_sentiment = case_when(ab_sentiment_min<0 & ab_sentiment_med<0 ~ "negative", 
+                                    ab_sentiment_min>0 & ab_sentiment_med>0 ~ "positive", 
+                                    TRUE ~"neutral") 
+         ) %>% 
+  ggplot(aes(x=altmetric, y=cite_per_year)) + 
+  geom_jitter(aes(colour=flag_sentiment), height=1, alpha=0.4) +
+  stat_smooth(aes(colour=flag_sentiment), method = "gam", se=FALSE) +
+  scale_colour_manual("abstract\nsentiment", 
+                      values = c("#E69F00", "grey70", "#009E73")) + 
+  facet_wrap(~PY, scales = "free", ncol = 1) + 
+  labs(title = "(A)", y="times cited per year", 
+       x = "altimetric") + 
+  theme_bw() + theme(legend.position="top") + 
+  guides(color = guide_legend(nrow = 2)) -> fig_citation
+
+
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years, 
+         !DI=="10.1111/j.1472-4642.2010.00725.x") %>% 
+  arrange(TC) %>% 
+  mutate(ti_order = rank(ti_sentiment_med)) %>% 
+  ggplot(aes(x=ab_sentiment_med, y=ti_order)) + 
+  geom_point(aes(colour=TC)) + 
+  scale_color_viridis_c("times\ncited", trans = "log1p") +
+  facet_wrap(~PY, scales = "free", ncol = 1) + 
+  labs(title = "(B)", x="abstract sentiment", 
+       y="rank title sentiment") + theme(legend.position="top") -> fig_sent_cite
+
+all_alti_senti %>% 
+  filter(!is.na(AB), !is.na(DI), !is.na(altmetric), PY %in% study_years, 
+         !DI=="10.1111/j.1472-4642.2010.00725.x") %>% 
+  arrange(altmetric) %>% 
+  mutate(ti_order = rank(ti_sentiment_med)) %>% 
+  ggplot(aes(x=ab_sentiment_med, y=ti_order)) + 
+  geom_point(aes(colour=altmetric)) + 
+  scale_color_viridis_c("altmetric", trans = "log1p") +
+  facet_wrap(~PY, scales = "free", ncol = 1) + 
+  labs(title = "(C)", x="abstract sentiment", 
+       y="rank title sentiment") + theme(legend.position="top") -> fig_sent_alt
+
+
+gridExtra::grid.arrange(fig_citation, fig_sent_cite, fig_sent_alt, nrow=1)
+
+```
+
+
+Tidy to keep workspace small.
+```{r tidy-workspace}
+rm(fig_citation)
+rm(fig_sent_alt)
+rm(fig_sent_cite)
+```
+

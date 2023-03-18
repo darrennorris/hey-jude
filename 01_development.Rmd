@@ -445,7 +445,7 @@ sentiment_phrases %>%
     dplyr::mutate(phrase_split = get_sentences(sent_02)) %>% 
   unnest_longer(phrase_split) -> phrase_split
 
-phrase_sentances %$%
+phrase_split %$%
     sentiment_by(phrase_split) -> phrase_sentances_sentiment
 
 sentiment_phrases %>% left_join(

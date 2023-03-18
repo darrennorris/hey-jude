@@ -1,0 +1,1 @@
+safe_scopus_search <- purrr::safely(rscopus::scopus_search, otherwise = NA)
