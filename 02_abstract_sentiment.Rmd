@@ -63,35 +63,80 @@ library(stansent)
 
 # Sentiment analysis
 
-Score Abstracts from conservation evidence.
+Score Abstracts from Conservation Evidence.
 
 Load data.
 ```{r load-data}
 # 927 Abstracts
-cedat_clean <- read.csv("data/cedat_cleandois.csv") %>% 
+cedat <- read.csv("data/cedat_cleandois.csv") %>% 
   filter(!is.na(ab_clean))
 
 
 ```
 
 
-
+Sentiment from multiple lexicons.
 
 ```{r text-sentiment, eval=FALSE}
+# clean Abstracts for sentiment analysis
+cedat %>% 
+  mutate(ab_clean = replace_html(ab_clean)) %>% 
+  mutate(ab_clean = replace_non_ascii(ab_clean)) -> cedat_clean
+# Jockers Rinker lexicon
+# recommended workflow  
+cedat_clean %>%
+    dplyr::mutate(ab_sentences = get_sentences(ab_clean))  %$%
+    sentiment_by(ab_sentences, list(study.id), 
+                 polarity_dt = lexicon::hash_sentiment_jockers_rinker, 
+                         question.weight = 0) -> ceab_sentiment_jr
+# For individual sentences.
+uncombine(ceab_sentiment_jr) %>% 
+  rename("sent_jr"="sentiment") ->  ceab_sentiment_sentences_jr
 
-cedat_clean %>% 
-  mutate(ab_02 = replace_html(ab_clean) %>%
-    dplyr::mutate(ab_split = get_sentences(ab_02))  %$%
-    sentiment_by(ab_02, list(study.id)) -> ceab_sentiment
+cedat_clean %>%
+    dplyr::mutate(ab_sentences = get_sentences(ab_clean))  %$%
+    sentiment_by(ab_sentences, list(study.id), 
+                 polarity_dt = lexicon::hash_sentiment_jockers, 
+                         question.weight = 0) -> ceab_sentiment_j
+# For individual sentences.
+uncombine(ceab_sentiment_j) %>% 
+  rename("sent_j"="sentiment") ->  ceab_sentiment_sentences_j
 
-# Individual sentences. Start 17:02 17 March
-cedat_clean %>% 
-  mutate(ab_02 = replace_html(ab_clean) %>%
-    dplyr::mutate(ab_split = get_sentences(ab_02)) %>% 
-  unnest_longer(ab_split) -> ab_split
+# Liu & HU (2004)
+cedat_clean %>%
+    dplyr::mutate(ab_sentences = get_sentences(ab_clean))  %$%
+    sentiment_by(ab_sentences, list(study.id), 
+                 polarity_dt = lexicon::hash_sentiment_huliu, 
+                         question.weight = 0) -> ceab_sentiment_lh
+# For individual sentences.
+uncombine(ceab_sentiment_lh) %>% 
+  rename("sent_lh"="sentiment") ->  ceab_sentiment_sentences_lh
 
-ab_split %$%
-    sentiment_by(ab_split) -> ceab_sentances_sentiment
+# Stanford coreNLP 11:30 - 13:00. hour and a half ish.
+cedat_clean %>%
+    dplyr::mutate(ab_sentences = get_sentences(ab_clean)) %>%
+  unnest_longer(ab_sentences) -> cedat_sentences
+sent_stanford <- sentiment_stanford(cedat_sentences$ab_sentences) %>% 
+  rename("ave_sent_stanford"="sentiment")
+
+
+```
+
+Join results from different lexicons.
+```{r join-lexicons}
+# Doubke check order has not changed.
+bind_cols(cedat_sentences, sent_stanford[,'ave_sent_stanford'], 
+          ceab_sentiment_sentences_jr[,'sent_jr'], 
+          ceab_sentiment_sentences_lh[,'sent_lh'], 
+          ceab_sentiment_sentences_j[,'sent_j']) -> sentiment_scores
+
+saveRDS(sentiment_scores, "data/sentiment_scores.RDS")
+
+```
+
+
+old notes
+```{r}
 
 sentiment_phrases %>% left_join(
 bind_cols(phrase_sentances %>% select(sentence, phrase_split), 
@@ -106,8 +151,8 @@ bind_cols(phrase_sentances %>% select(sentence, phrase_split),
 ) -> sentiment_phrases_reviews
 
 saveRDS(sentiment_phrases_reviews, "data/sentiment_phrases_reviews.RDS")
-
 ```
+
 
 Plot to check
 ```{r plot-human, fig.cap="Sentiment scores of human annotated text . Values across four sources 2264 investor sentiments for financial news headlines (finance), and 2223 positive or negative sentiment, extracted from reviews of products (Amazon), films (IMDB), and restaurants (Yelp). "}
