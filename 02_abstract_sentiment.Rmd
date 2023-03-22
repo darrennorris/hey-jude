@@ -75,11 +75,14 @@ cedat <- read.csv("data/cedat_cleandois.csv") %>%
 wdat <- read_excel("data/williams_abstracts.xlsx", 
                    na = c("", "NA")) %>% 
   filter(!is.na(ab_scopus), !is.na(journal_scopus), is.na(vertebrate))
-# 835 Abstracts from search 2000, 2021, 2022
-myfile <- "data/scopus_835.bib"
-myrefs <- bibliometrix::convert2df(file = myfile, dbsource = "scopus", 
-                                     format = "bibtex") 
-write.csv(myrefs, "data/scopus_bib.csv", row.names = FALSE)
+# 835 Abstracts from search 2000, 2021, 2022. Exclude those not vertebrates
+#myfile <- "data/scopus_835.bib"
+#myrefs <- bibliometrix::convert2df(file = myfile, dbsource = "scopus", 
+#                                     format = "bibtex") 
+#write.csv(myrefs, "data/scopus_bib.csv", row.names = FALSE)
+# 593
+datsco <- read.csv("data/scopus_bib.csv") %>% 
+  filter(vert==1)
 ```
 
 Join data from CE and Williams. 1165 Abstracts.
@@ -95,7 +98,7 @@ wdat %>%
          "publication.title"="title", "journal.name" ="journal_scopus", 
          "ab_clean" = "ab_scopus", "doi_clean"="doi_scopus") %>%
   mutate(source = "Williams", mykey = paste("Williams",study.id, sep="_")), 
-myrefs %>% 
+datsco %>% 
   mutate(study.id = row_number(), 
          publication.year = PY,
          publication.title = str_to_sentence(TI), 
@@ -117,8 +120,6 @@ Sentiment from multiple lexicons.
 ```{r text-sentiment, eval=FALSE}
 # clean Abstracts for sentiment analysis
 study_abstracts %>% 
-  filter(mykey=="Scopus_596")
-study_abstracts %>% 
   mutate(ab_clean = replace_html(ab_clean)) %>% 
   mutate(ab_clean = replace_non_ascii(ab_clean)) %>% 
   mutate(ab_clean = str_trim(str_squish(ab_clean))) -> abstracts_clean
@@ -131,19 +132,15 @@ abstracts_clean %>%
                          question.weight = 0) -> ab_sentiment_jr
 summary(ab_sentiment_jr$word_count)
 #    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#   19.0   202.0   244.0   244.4   285.0  1008.0 
+#   19.0   202.0   245.0   244.4   285.0  743.0 
 # For individual sentences.
 uncombine(ab_sentiment_jr) %>% 
   rename("sent_jr"="sentiment") ->  ab_sentiment_sentences_jr
 summary(ab_sentiment_sentences_jr$word_count)
 #   Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-#   1.00   16.00   22.00   22.5   29.00  111.00      128 
-# check longest sentences. Conservation Evidence missing full stops.
-ab_sentiment_sentences_jr %>% 
-  filter(mykey %in% c("Williams_1340", "CE_8144"))
- abstracts_clean %>% 
-  filter(mykey %in% c("Williams_1340", "CE_8144"))  
+#   1.00   15.00   22.00   22.6   29.00  111.00      94 
 
+# Scores for positive and negative
  dftest <- data.frame(abkey = c("neg", "pos"), ab_clean = c("Biodiversity is declining at unprecedented rates worldwide. Yet cascading effects of biodiversity loss on other taxa are largely unknown because baseline data are often unavailable. We document the collapse of a Neotropical snake community after the invasive fungal pathogen Batrachochytrium dendrobatidis caused a chytridiomycosis epizootic leading to the catastrophic loss of amphibians, a food source for snakes. After mass mortality of amphibians, the snake community contained fewer species and was more homogeneous across the study site, with several species in poorer body condition, despite no other systematic changes in the environment. The demise of the snake community after amphibian loss demonstrates the repercussive and often unnoticed consequences of the biodiversity crisis and calls attention to the invisible declines of rare and data-deficient species.", 
                       "Sustainable use as a mechanism for the conservation and recovery of exploited wildlife populations remains intensely debated, including for freshwater turtles, a diverse and imperiled group of aquatic reptiles that are an important food source for many residents of tropical regions. Here we evaluated the geographical extent of recovery options for a heavily exploited tropical freshwater turtle fauna across 8.86 M km2 of South American river catchments under scenarios of Business-as-Usual (BAU), Protection (Pr) and Community-Based-Management (CBM). For the widespread indicator species, Podocnemis unifilis, demographic analysis showed that populations subject to moderate levels of female harvest (≤10%) can recover over broad areas if concurrent headstarting of hatchlings is practiced more widely. With regional strengthening of the protected area network unlikely, CBM developed with harvest frameworks derived from demographic rates appropriate to tropical species could catalyze a rapid continental scale recovery of Amazonian freshwater turtles within a few decades."))
 
@@ -152,7 +149,9 @@ dftest %>%
     sentiment_by(ab_sentences, list(abkey), 
                  polarity_dt = lexicon::hash_sentiment_jockers_rinker, 
                          question.weight = 0) -> ab_sentiment_test 
- 
+ #    abkey word_count        sd ave_sentiment
+# 1:   neg        124 0.3490789    -0.3727813
+# 2:   pos        150 0.1918053     0.5219342
  # Below for multiple lexicons
 cedat_clean %>%
     dplyr::mutate(ab_sentences = get_sentences(ab_clean))  %$%
@@ -217,8 +216,8 @@ abstracts_clean %>%
                                 ucl < 0 ~"negative", 
                                 .default = "neutral")) %>% 
   pull(sent_class) %>% table()
-# negative neutral positive 
-#  1       1978        10
+#  neutral positive 
+#  1978        9
 
 ```
 
@@ -246,7 +245,7 @@ abstracts_clean %>%
 abstracts_clean %>% 
   left_join(ab_sentiment_jr) %>% pull(ave_sentiment) %>% 
   quantile(probs = (1-prop_negative)) -> quant_pos
-# n = 22 with postive >= quant_pos
+# n = 28 with postive >= quant_pos
 abstracts_clean %>% 
   left_join(ab_sentiment_jr) %>% filter(ave_sentiment >= quant_pos) %>% nrow()
 
@@ -300,11 +299,16 @@ Select random sample stratified by word count and sentiment.
 ```{r random-sample-105}
 study_abstracts_class %>% 
   filter(!is.na(word_class)) %>%
-  slice_sample(n=7, by=strat_class, replace = FALSE) -> study_abstracts_105
+  slice_sample(n=9, by=strat_class, replace = FALSE) -> study_abstracts_105
 
 length(unique(study_abstracts_105$mykey)) #105
 study_abstracts_105 %>% pull(mykey) -> sample_105
-
+plot(sort(study_abstracts_105$ave_sentiment))
+study_abstracts_105 %>% 
+  arrange(ave_sentiment) %>% 
+  mutate(rank = row_number()) %>%
+  ggplot(aes(x= rank, y=ave_sentiment)) + 
+  geom_point(aes(colour=sent_class, size=word_count))
 ```
 
 Compare distributions
