@@ -51,6 +51,7 @@ library(readxl)
 library(gridExtra)
 library(magrittr)
 library(rcrossref)
+library(RecordLinkage)
 
 ```
 
@@ -111,3 +112,76 @@ wdat %>%
             )
 ```
 
+## Williams studies
+Load data and exclude those already in Conservation Evidence.
+```{r load-williams}
+# 1538 studies select years and articles = 515
+wdat <- read_excel("data/williams_studies.xlsx", na = c("", "NA")) %>% 
+  filter(year>=2011, !is.na(Threat_category_numeric), 
+         !is.na(journal))
+# CE studies
+cedat_c <- read.csv("data/cedat_cleandois.csv") %>% 
+  filter(!is.na(ab_clean))
+
+```
+
+Find duplicate studies based on matching titles.
+```{r find-duplicates}
+# function to calculate similarity between titles.
+find_title <- function(x){
+indat <- x
+indat %>% pull(title) -> t1
+jw = RecordLinkage::jarowinkler(t1[1], cedat_c[,'publication.title'])
+jw_max =max(jw)
+selJW <- which(jw ==jw_max)
+myn <- length(selJW)
+if(myn>0){
+dfout <- data.frame(score_jw = jw_max, 
+                    williams_title = t1, 
+                    cedat_c[selJW, c('study.id', 'publication.title', 'journal.name')])
+}else{ 
+  dfout <- data.frame(score_jw = NA, 
+                      williams_title = NA, 
+                      study.id = NA, publication.title = NA, journal.name=NA)
+  }
+}
+
+titles <- plyr::ddply(wdat, .(aid), .fun = find_title)
+# here 0.91 is value for same titles
+titles %>% filter(score_jw >= 0.91) %>% pull(aid) -> exclude_williams
+# data without duplicating CE
+wdat_scopus <- wdat %>%filter(!aid %in% exclude_williams)
+```
+
+Search Scopus for titles.
+```{r williams-search, eval=FALSE}
+# Set API and Inst keys
+s <- read_excel("data/something.xlsx")
+s %>% filter(name=="apikey") %>% pull(value) -> myapikey
+options("elsevier_api_key" = myapikey)
+have_api_key()
+print(rscopus::get_api_key(), reveal = TRUE)
+s %>% filter(name=="insttoken") %>% pull(value) -> myinsttoken
+insttoken <- myinsttoken
+insttoken <- inst_token_header(insttoken)
+
+# tidy data for function
+wdat_scopus %>% 
+  select(aid, title, journal) %>% 
+  mutate(title_clean = str_squish(str_trim(textclean::replace_html(title, symbol = FALSE))) 
+        ) -> williams_titles
+
+# helper functions
+source("R/safe_scopus_search.R")
+source("R/get_scopus_search_williams.R")
+# Cant track down what causes warning but this works. Need to add dois as well.
+scopus_searchwill <- plyr::ddply(williams_titles, .(aid), .fun = get_scopus_search_williams)
+# title search gives 398 Abstracts
+scopus_searchwill %>% filter(!is.na(ab_scopus)) %>% nrow()
+```
+
+Export Williams Abstracts
+```{r export-williams}
+wdat_scopus %>% left_join(scopus_searchwill) %>% 
+  write.csv("data/williams_abstracts.csv", row.names = FALSE)
+```

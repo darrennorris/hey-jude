@@ -131,7 +131,9 @@ cebird <- read_refs(
 Join scraped CE and birds. Total of 1145 studies.
 ```{r join-studies}
 sid <- as.character(unique(cedat_scraped$study.id))
-bind_rows(cedat_scraped,
+bind_rows(cedat_scraped %>% 
+            # exclude book chapter
+            filter(!study.id==7468),
 cebird %>% 
   # dont include duplicates
   filter(!ID %in% sid) %>% 
@@ -260,6 +262,7 @@ cedat_studies %>%
 
 
 ```
+Check Abstract with no full stops for study 8144.
 
 Get dois and Abstracts from pii and eid.
 ```{r get-doi-scopus}

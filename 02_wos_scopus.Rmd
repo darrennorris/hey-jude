@@ -1,5 +1,5 @@
 ---
-  title: "02_scopus_wos"
+  title: "02_wos_scopus"
 author: "Darren Norris"
 date: "`r Sys.Date()`"
 output:
