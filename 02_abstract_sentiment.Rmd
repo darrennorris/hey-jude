@@ -85,7 +85,7 @@ datsco <- read.csv("data/scopus_bib.csv") %>%
   filter(vert==1)
 ```
 
-Join data from CE and Williams. 1165 Abstracts.
+Join data from CE, Williams and Scopus. 1747 Abstracts.
 ```{r join-data}
 bind_rows(
 cedat %>% 
@@ -120,9 +120,15 @@ Sentiment from multiple lexicons.
 ```{r text-sentiment, eval=FALSE}
 # clean Abstracts for sentiment analysis
 study_abstracts %>% 
-  mutate(ab_clean = replace_html(ab_clean)) %>% 
-  mutate(ab_clean = replace_non_ascii(ab_clean)) %>% 
-  mutate(ab_clean = str_trim(str_squish(ab_clean))) -> abstracts_clean
+  mutate(ab_clean = replace_html(ab_clean), 
+         publication.title = replace_html(publication.title)) %>% 
+  mutate(ab_clean = replace_non_ascii(ab_clean), 
+         publication.title = replace_non_ascii(publication.title)) %>% 
+  mutate(ab_clean = str_trim(str_squish(ab_clean)), 
+         publication.title = str_trim(str_squish(publication.title))) -> abstracts_clean
+# remove "â€™"  "â€˜" 'â€“' "â€"
+
+
 # Jockers Rinker lexicon
 # recommended workflow  
 abstracts_clean %>%
@@ -130,12 +136,30 @@ abstracts_clean %>%
     sentiment_by(ab_sentences, list(mykey), 
                  polarity_dt = lexicon::hash_sentiment_jockers_rinker, 
                          question.weight = 0) -> ab_sentiment_jr
+
+# upwight negatyive and downweight 0
+abstracts_clean %>%
+    dplyr::mutate(ab_sentences = get_sentences(ab_clean))  %$%
+    sentiment_by(ab_sentences, list(mykey), 
+                 polarity_dt = lexicon::hash_sentiment_jockers_rinker, 
+                 averaging.function = sentimentr::average_weighted_mixed_sentiment,
+                         question.weight = 0) -> ab_sentiment_jr_mix
+
 summary(ab_sentiment_jr$word_count)
 #    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 #   19.0   202.0   245.0   244.4   285.0  743.0 
+summary(ab_sentiment_jr$ave_sentiment)
+#     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+# -0.54801  0.01714  0.10148  0.09886  0.18024  0.69254
+summary(ab_sentiment_jr_mix$ave_sentiment)
+#    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+#-1.45639 -0.22508 -0.02607 -0.07975  0.11501  0.69254
+
 # For individual sentences.
 uncombine(ab_sentiment_jr) %>% 
   rename("sent_jr"="sentiment") ->  ab_sentiment_sentences_jr
+uncombine(ab_sentiment_jr_mix) %>% 
+  rename("sent_jr"="sentiment") ->  ab_sentiment_sentences_jr_mix
 summary(ab_sentiment_sentences_jr$word_count)
 #   Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
 #   1.00   15.00   22.00   22.6   29.00  111.00      94 
@@ -152,6 +176,17 @@ dftest %>%
  #    abkey word_count        sd ave_sentiment
 # 1:   neg        124 0.3490789    -0.3727813
 # 2:   pos        150 0.1918053     0.5219342
+dftest %>%
+    dplyr::mutate(ab_sentences = get_sentences(ab_clean))  %$%
+    sentiment_by(ab_sentences, list(abkey), 
+                 polarity_dt = lexicon::hash_sentiment_jockers_rinker, 
+                 averaging.function = sentimentr::average_weighted_mixed_sentiment,
+                         question.weight = 0) -> ab_sentiment_test_mix 
+#    abkey word_count        sd ave_sentiment
+# 1:   neg        124 0.3490789    -1.4993570
+# 2:   pos        150 0.1918053     0.5219342
+
+
  # Below for multiple lexicons
 cedat_clean %>%
     dplyr::mutate(ab_sentences = get_sentences(ab_clean))  %$%
@@ -219,6 +254,19 @@ abstracts_clean %>%
 #  neutral positive 
 #  1978        9
 
+abstracts_clean %>% 
+  left_join(ab_sentiment_jr_mix) %>%
+  mutate(lcl = ave_sentiment - (sd*1.96), 
+         ucl = ave_sentiment + (sd*1.96)) %>% 
+  mutate(flag_pos = if_else(lcl>0,1,0), 
+         flag_neg = if_else(ucl<0,1,0), 
+         sent_class = case_when(lcl > 0 ~"positive", 
+                                ucl < 0 ~"negative", 
+                                .default = "neutral")) %>% 
+  pull(sent_class) %>% table() 
+#negative  neutral positive 
+#     177     1561        9
+
 ```
 
 Distribution
@@ -234,20 +282,41 @@ abstracts_clean %>%
 Distribution by word count
 ```{r word-distribution}
 abstracts_clean %>% 
-  left_join(ab_sentiment_jr) %>% pull(ave_sentiment) %>% quantile()
-# n = 235 (20.2 %) negative on average 
-abstracts_clean %>% 
-  left_join(ab_sentiment_jr) %>% 
-  # no all negative
-  #mutate(lcl = ave_sentiment - (1.96*sd)) %>% 
-  filter(ave_sentiment < -0.2) %>% nrow()/nrow(study_abstracts) -> prop_negative
+  left_join(ab_sentiment_jr_mix) %>%
+  mutate(lcl = ave_sentiment - (sd*1.96), 
+         ucl = ave_sentiment + (sd*1.96)) %>% 
+  mutate(flag_pos = if_else(lcl>0,1,0), 
+         flag_neg = if_else(ucl<0,1,0), 
+         sent_class = case_when(lcl > 0 ~"positive", 
+                                ucl < 0 ~"negative", 
+                                .default = "neutral")) %>% 
+  filter(sent_class =="negative") %>% pull(ave_sentiment) %>% max() #[1] -0.1487846
 
 abstracts_clean %>% 
-  left_join(ab_sentiment_jr) %>% pull(ave_sentiment) %>% 
+  left_join(ab_sentiment_jr) %>% pull(ave_sentiment) %>% quantile() 
+#    0%        25%        50%        75%       100% 
+#-0.5480078  0.0171393  0.1014832  0.1802385  0.6925363 
+abstracts_clean %>% 
+  left_join(ab_sentiment_jr_mix) %>% pull(ave_sentiment) %>% quantile()
+#  0%         25%         50%         75%        100% 
+#-1.45639327 -0.22508283 -0.02606893  0.11500656  0.69253627 
+# n = 235 (20.2 %) negative on average 
+abstracts_clean %>% 
+  left_join(ab_sentiment_jr_mix) %>% pull(ave_sentiment) %>% quantile(prob=0.10) -> neg_10
+abstracts_clean %>% 
+  left_join(ab_sentiment_jr_mix) %>% pull(ave_sentiment) %>% quantile(prob=0.90) -> pos_10
+abstracts_clean %>% 
+  left_join(ab_sentiment_jr_mix) %>% 
+  # no all negative
+  #mutate(lcl = ave_sentiment - (1.96*sd)) %>% 
+  filter(ave_sentiment <= neg_25) %>% nrow()/nrow(abstracts_clean) -> prop_negative
+
+abstracts_clean %>% 
+  left_join(ab_sentiment_jr_mix) %>% pull(ave_sentiment) %>% 
   quantile(probs = (1-prop_negative)) -> quant_pos
 # n = 28 with postive >= quant_pos
 abstracts_clean %>% 
-  left_join(ab_sentiment_jr) %>% filter(ave_sentiment >= quant_pos) %>% nrow()
+  left_join(ab_sentiment_jr_mix) %>% filter(ave_sentiment >= quant_pos) %>% nrow()
 
 # word count
 # median 244 words
@@ -255,19 +324,19 @@ abstracts_clean %>%
   left_join(ab_sentiment_jr) %>% pull(word_count) %>% quantile()
 
 # 6 word classes * 3 sentiments = 18 classes. 
-# retain only positive and negative = 12 classes.
-# 9 articles for each class = 108 in total
+# n = 6 * 18 = 108 abstracts
 abstracts_clean %>% 
-  left_join(ab_sentiment_jr) %>%
+  left_join(ab_sentiment_jr_mix) %>% 
+  filter(word_count<=500) %>%
   mutate(word_class = case_when(word_count >50 & word_count <=150 ~"150", 
                                 word_count >= 151 & word_count <=200  ~"200", 
                                 word_count >= 201  & word_count <=250  ~"250", 
                                 word_count >= 251  & word_count <=300  ~"300", 
                                 word_count >= 301  & word_count <=350  ~"350", 
-                                word_count > 350 ~ "350",
+                                word_count > 350 ~ "long",
                                 .default = NA_character_), 
-         sent_class = case_when(ave_sentiment < -0.2 ~"negative", 
-                                ave_sentiment >= quant_pos ~"positive", 
+         sent_class = case_when(ave_sentiment <= neg_10 ~"negative", 
+                                ave_sentiment >= pos_10 ~"positive", 
                                 .default = "neutral")) %>% 
   mutate(strat_class = paste(sent_class, word_class, sep="_")) -> study_abstracts_class
 
@@ -294,28 +363,74 @@ study_abstracts_class %>%
   coord_flip() + 
   facet_wrap(~source)
 ```
+cleaeland plot
+```{r}
+study_abstracts_class %>% 
+  arrange(ave_sentiment) %>% 
+  mutate(rank = row_number()) %>%
+  ggplot(aes(x= ave_sentiment, y=rank)) + 
+  geom_point(aes(fill=sent_class, size=word_count), shape=21, 
+             alpha=0.3) + 
+  scale_fill_viridis_d("sentiment") + 
+  scale_size_continuous("word count") + 
+  coord_cartesian(x=c(-1.5,1.5)) +
+  labs(x = "sentiment score")
+```
+
 
 Select random sample stratified by word count and sentiment.
 ```{r random-sample-105}
 study_abstracts_class %>% 
   filter(!is.na(word_class)) %>%
-  slice_sample(n=9, by=strat_class, replace = FALSE) -> study_abstracts_105
+  slice_sample(n=6, by=strat_class, replace = FALSE) -> study_abstracts_sample
 
-length(unique(study_abstracts_105$mykey)) #105
-study_abstracts_105 %>% pull(mykey) -> sample_105
-plot(sort(study_abstracts_105$ave_sentiment))
-study_abstracts_105 %>% 
+length(unique(study_abstracts_sample$mykey)) #108
+study_abstracts_sample %>% pull(mykey) -> sample_studies # 108
+
+study_abstracts_sample %>% 
   arrange(ave_sentiment) %>% 
   mutate(rank = row_number()) %>%
-  ggplot(aes(x= rank, y=ave_sentiment)) + 
-  geom_point(aes(colour=sent_class, size=word_count))
+  ggplot(aes(x= ave_sentiment, y=rank)) + 
+  geom_point(aes(fill=sent_class, size=word_count), shape=21, 
+             alpha=0.4) + 
+  scale_fill_viridis_d("sentiment") + 
+  scale_size_continuous("word count") + 
+  coord_cartesian(x=c(-1,1)) +
+  labs(x = "sentiment score")
 ```
 
 Compare distributions
+```{r}
+study_abstracts_class %>% 
+  mutate(flag_sample = if_else(mykey %in% sample_studies, "sample", "Abstracts")) %>%
+  ggplot(aes(x=word_count)) + 
+  geom_histogram(bins=8) +
+  facet_wrap(~sent_class, scales = "free_y")
+
+```
+```{r}
+study_abstracts_class %>% 
+  mutate(flag_sample = if_else(mykey %in% sample_studies, "sample", "Abstracts")) %>%
+  filter(flag_sample=="sample") %>%
+  ggplot(aes(x=word_count)) + 
+  geom_histogram(bins=8) +
+  facet_wrap(~sent_class, scales = "free_y")
+
+```
+check values
+```{r}
+study_abstracts_class %>% 
+  mutate(flag_sample = if_else(mykey %in% sample_studies, "sample", "Abstracts")) %>%
+  filter(flag_sample=="sample") %>% pull(sent_class) %>% table()
+# negative  neutral positive 
+#      36       36       36 
+```
+
+
 ```{r compare-distributions}
 
 study_abstracts_class %>% 
-  mutate(flag_sample = if_else(mykey %in% sample_105, "sample 105", "Abstracts")) %>% 
+  mutate(flag_sample = if_else(mykey %in% sample_studies, "sample", "Abstracts")) %>% 
   ggplot(aes(x=word_count)) + 
   geom_histogram(aes(y=after_stat(density),  fill = flag_sample), bins=7)+
  geom_density(aes(colour= flag_sample), alpha=.2)  + 
@@ -323,7 +438,7 @@ study_abstracts_class %>%
 fig_hist_wordcount
 # sentiment scores
 study_abstracts_class %>% 
-  mutate(flag_sample = if_else(mykey %in% sample_105, "sample 105", "Abstracts")) %>% 
+  mutate(flag_sample = if_else(mykey %in% sample_studies, "sample", "Abstracts")) %>% 
   ggplot(aes(x=ave_sentiment)) + 
   geom_histogram(aes(y=after_stat(density),  fill = flag_sample), bins=10)+
  geom_density(aes(colour= flag_sample), alpha=.2)  + 
@@ -336,11 +451,11 @@ Export sample.
 ```{r export-sample}
 
 study_abstracts_class %>% 
-  mutate(flag_sample = if_else(mykey %in% sample_105, 1, 0)) %>% 
+  mutate(flag_sample = if_else(mykey %in% sample_studies, 1, 0)) %>% 
   write.csv("data/abstracts_for_classification.csv", row.names=FALSE)
   
  study_abstracts_class %>% 
-  mutate(flag_sample = if_else(mykey %in% sample_105, 1, 0)) %>%  
+  mutate(flag_sample = if_else(mykey %in% sample_studies, 1, 0)) %>%  
   select(mykey, source, study.id, publication.year,	doi_clean, 
          journal.name,	ab_clean, publication.title, flag_sample) %>% 
   write.csv("data/abstracts_for_students.csv", row.names=FALSE)
