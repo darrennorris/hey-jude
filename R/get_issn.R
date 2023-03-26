@@ -73,4 +73,5 @@ jnew %>%
                                                "CONSERVATION"), 1, 0)) %>% 
   mutate(flag_conservation = ifelse(str_detect(str_to_upper(Journal), 
                                                "ORYX"), 1, flag_conservation)) -> jnew
-write.csv("data/flag_conservation.csv")
+jnew %>% 
+  write.csv("data/flag_conservation.csv")
