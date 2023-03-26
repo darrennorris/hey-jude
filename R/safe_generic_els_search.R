@@ -1,0 +1,1 @@
+safe_generic_els_search <- purrr::safely(rscopus::generic_elsevier_api, otherwise = NA)

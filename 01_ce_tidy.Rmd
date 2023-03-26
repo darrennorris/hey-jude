@@ -72,10 +72,7 @@ Does not include studies that solely report monitoring methods, species ecology,
 # 2020 Terrestrial Mammal
 # 2021 Bat, Reptile, Marine and Freshwater Mammal, Marine Fish
 # Few Conservation Biology and Biodiversity and Conservation 
-# 7874 - doi incorrect. Use manually adjusted dois
-# 10316 - doi incorrect duplicate of 10478
-# 8599 doi duplicate of 8598
-# 10475 url duplicate of 10237
+
 
 cedat <- read_excel('data/studydat_fordarrenn_24_02_2023DN.xlsx')
 cedat %>% 
